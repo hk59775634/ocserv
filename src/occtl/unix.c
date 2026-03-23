@@ -1748,25 +1748,20 @@ static int session_info_cmd(void *ctx, SecmListCookiesReplyMsg *args, FILE *out,
 	time_t t;
 	unsigned int at_least_one = 0;
 	int ret = 1;
-	unsigned int i;
+	unsigned int i, j;
 	const char *sid;
 	unsigned int init_pager = 0;
 	unsigned int match_len = 0;
+	unsigned int n_visible = 0;
+	unsigned int vis[args->n_cookies > 0 ? args->n_cookies : 1];
 	char tmpbuf[MAX_TMPSTR_SIZE];
 
 	if (lsid)
 		match_len = strlen(lsid);
 
-	if (out == NULL) {
-		out = pager_start(params);
-		init_pager = 1;
-	}
-
-	if (HAVE_JSON(params))
-		fprintf(out, "[\n");
-
+	/* Pre-pass: populate session_entries for tab-completion and collect
+	 * the indices of entries that will actually be printed into vis[]. */
 	session_entries_clear();
-
 	for (i = 0; i < args->n_cookies; i++) {
 		if (!all && args->cookies[i]->status != PS_AUTH_COMPLETED &&
 		    lsid == NULL)
@@ -1779,7 +1774,23 @@ static int session_info_cmd(void *ctx, SecmListCookiesReplyMsg *args, FILE *out,
 		if (lsid && strncmp(sid, lsid, match_len) != 0)
 			continue;
 
-		if (at_least_one > 0)
+		vis[n_visible++] = i;
+	}
+
+	if (out == NULL) {
+		out = pager_start(params);
+		init_pager = 1;
+	}
+
+	if (HAVE_JSON(params))
+		fprintf(out, "[\n");
+
+	for (j = 0; j < n_visible; j++) {
+		i = vis[j];
+		sid = shorten(args->cookies[i]->safe_id.data,
+			      args->cookies[i]->safe_id.len, 1);
+
+		if (j > 0)
 			fprintf(out, "\n");
 
 		print_start_block(out, params);
@@ -1885,7 +1896,7 @@ static int session_info_cmd(void *ctx, SecmListCookiesReplyMsg *args, FILE *out,
 		}
 #endif
 
-		print_end_block(out, params, i < (args->n_cookies - 1) ? 1 : 0);
+		print_end_block(out, params, j < n_visible - 1);
 
 		at_least_one = 1;
 	}
