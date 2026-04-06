@@ -409,7 +409,6 @@ int forward_msg(void *pool, int ifd, uint8_t icmd, int ofd, uint8_t ocmd,
 	struct iovec iov[3];
 	char data[5];
 	uint32_t length;
-	ssize_t left;
 	uint8_t rcmd;
 	struct msghdr hdr;
 	int ret;
@@ -454,9 +453,7 @@ int forward_msg(void *pool, int ifd, uint8_t icmd, int ofd, uint8_t ocmd,
 		return ERR_BAD_COMMAND;
 	}
 
-	left = length;
-
-	while (left > 0) {
+	for (ssize_t left = length; left > 0; left -= ret) {
 		char buf[1024];
 
 		ret = recv(ifd, buf, sizeof(buf), 0);
@@ -476,8 +473,6 @@ int forward_msg(void *pool, int ifd, uint8_t icmd, int ofd, uint8_t ocmd,
 				  __FILE__, __LINE__, strerror(errno));
 			return ERR_BAD_COMMAND;
 		}
-
-		left -= ret;
 	}
 
 	return 0;
