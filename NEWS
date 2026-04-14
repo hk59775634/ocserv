@@ -15,6 +15,7 @@
 - Replaced autoconf/automake build system with meson (#699)
 - Added nftables-based ocserv-fw; requires ipcalc-ng/ipcalc (#397)
 - No longer need to duplicate global options in virtual hosts (#698)
+- Timestamps in IPC messages extended to 64-bit for future date support
 - Fixed a bug where a correct password was rejected after a wrong password
   attempt in the same session (#323)
 - Aligned the default values for 'dpd' and 'mobile-dpd' options with

@@ -83,7 +83,7 @@ message auth_cookie_reply_msg
 	optional string ipv6_local = 10;
 
 	required bytes sid = 11;
-	required uint64 session_start_time = 12;
+	required int64 session_start_time = 12;
 	required bytes secmod_addr = 13;
 
 	/* additional config */
@@ -137,7 +137,7 @@ message cli_stats_msg
 	required uint64 bytes_in = 1;
 	required uint64 bytes_out = 2;
 	optional bytes sid = 3;
-	required uint32 uptime = 4;
+	required int64 uptime = 4;
 	optional string remote_ip = 5;
 	optional string ipv4 = 6;
 	optional string ipv6 = 7;
@@ -172,7 +172,7 @@ message worker_startup_msg
 	required CONN_TYPE conn_type = 4;
 	required string remote_ip_str = 5;
 	required string our_ip_str = 6;
-	required uint64 session_start_time = 7;
+	required int64 session_start_time = 7;
 	required bytes remote_addr = 8;
 	required bytes our_addr = 9;
 	required bytes sec_auth_init_hmac = 10;
@@ -257,7 +257,7 @@ message sec_auth_init_msg
 	optional string device_platform = 12;
 	optional string device_type = 13;
 	optional string vhost = 14;
-	required uint64 session_start_time = 15;
+	required int64 session_start_time = 15;
 	required bytes hmac = 16;
 	required string orig_remote_ip = 17; /* if proxy proto is in use this is
 					the original IP that initiated the session */
@@ -320,7 +320,7 @@ message secm_session_open_msg
 message secm_session_close_msg
 {
 	required bytes sid = 1; /* cookie */
-	optional uint32 uptime = 3;
+	optional int64 uptime = 3;
 	optional uint64 bytes_in = 4;
 	optional uint64 bytes_out = 5;
 	optional string ipv4 = 6;
@@ -355,7 +355,7 @@ message secm_session_reply_msg
 	optional string user_agent = 12;
 	optional string device_platform = 13;
 	optional string device_type = 14;
-	required uint64 session_start_time = 15;
+	required int64 session_start_time = 15;
 }
 
 /* internal struct */
@@ -369,7 +369,7 @@ message cookie_int_msg
 	optional string groupname = 6;
 	required string user_agent = 7;
 	required string remote_ip = 8;
-	required uint32 expires = 9;
+	required int64 expires = 9;
 	required uint32 status = 10; /* the authentication status (PS_*) */
 	required bool in_use = 11;
 	required string vhost = 12;

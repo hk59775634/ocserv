@@ -234,7 +234,7 @@ if get_option('root-tests')
 
   root_scripts = [
     'haproxy-connect', 'test-iroute', 'test-multi-cookie',
-    'test-pass-script', 'idle-timeout',
+    'test-pass-script', 'idle-timeout', 'test-year-2038',
     'test-cookie-timeout', 'test-cookie-timeout-2',
     'test-explicit-ip', 'test-cookie-invalidation',
     'test-user-config', 'test-append-routes', 'test-ban',
