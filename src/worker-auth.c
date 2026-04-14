@@ -787,8 +787,8 @@ static int recv_cookie_auth_reply(worker_st *ws)
 						ws, msg->ipv6_local);
 			}
 
-			if (msg->config->no_udp != 0)
-				WSPCONFIG(ws)->udp_port = 0;
+			if (msg->config->has_no_udp)
+				WSCONFIG(ws)->no_udp = msg->config->no_udp;
 
 			/* routes */
 			if (check_if_default_route(msg->config->routes,

@@ -2131,7 +2131,8 @@ static int connect_handler(worker_st *ws)
 	DTLS_ACTIVE(ws)->udp_state = UP_DISABLED;
 	DTLS_INACTIVE(ws)->udp_state = UP_DISABLED;
 
-	if (WSPCONFIG(ws)->udp_port != 0 && req->master_secret_set != 0) {
+	if (WSPCONFIG(ws)->udp_port != 0 && !WSCONFIG(ws)->no_udp &&
+	    req->master_secret_set != 0) {
 		memcpy(ws->master_secret, req->master_secret, TLS_MASTER_SIZE);
 		DTLS_ACTIVE(ws)->udp_state = UP_WAIT_FD;
 		DTLS_INACTIVE(ws)->udp_state = UP_WAIT_FD;

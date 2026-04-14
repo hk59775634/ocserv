@@ -1308,6 +1308,8 @@ static int cfg_ini_handler(void *_ctx, const char *section, const char *name,
 		READ_STRING(config->camouflage_secret);
 	} else if (strcmp(name, "camouflage_realm") == 0) {
 		READ_STRING(config->camouflage_realm);
+	} else if (strcmp(name, "no-udp") == 0) {
+		READ_TF(config->no_udp);
 	} else {
 		if (reload == 0)
 			fprintf(stderr,

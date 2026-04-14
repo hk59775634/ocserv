@@ -767,6 +767,16 @@ static int forward_udp_to_owner(main_server_st *s, struct listener_st *listener)
 	}
 
 	if (proc_to_send != 0) {
+		if (GETPCONFIG(s)->udp_port == 0 ||
+		    proc_to_send->config->no_udp) {
+			mslog(s, proc_to_send, LOG_WARNING,
+			      "Received UDP packet from %s while UDP is disabled for this client. "
+			      "Possible cause: compromised worker or incorrect worker match.",
+			      human_addr((struct sockaddr *)&cli_addr,
+					 cli_addr_size, tbuf, sizeof(tbuf)));
+			goto fail;
+		}
+
 		UdpFdMsg msg = UDP_FD_MSG__INIT;
 
 		if (now - proc_to_send->udp_fd_receive_time <=

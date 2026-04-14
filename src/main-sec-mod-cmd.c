@@ -338,7 +338,7 @@ static void apply_default_config(sec_mod_instance_st *sec_mod_instance,
 	vhost_cfg_st *vhost = proc->vhost;
 
 	if (!gc->has_no_udp) {
-		gc->no_udp = (vhost->perm_config.udp_port != 0) ? 0 : 1;
+		gc->no_udp = vhost->perm_config.config->no_udp;
 		gc->has_no_udp = 1;
 	}
 

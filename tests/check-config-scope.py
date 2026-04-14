@@ -246,7 +246,6 @@ def main():
     # are per-user only and don't appear in the global sample.config — skip those.
     PER_USER_ONLY = {
         "iroute", "hostname", "explicit-ipv4", "explicit-ipv6",
-        "no-udp",
         "ipv4-dns", "ipv6-dns", "ipv4-nbns", "ipv6-nbns",
     }
     for opt in sorted(user_in_code):

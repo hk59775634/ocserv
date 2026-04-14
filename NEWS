@@ -22,6 +22,8 @@
 - Aligned default values for 'keepalive', 'rekey-time', 'cookie-timeout',
   'auth-timeout', 'ban-reset-time', 'max-ban-score', and
   'switch-to-tcp-timeout' with the values documented in sample.config
+- The `no-udp` option can now be used to disable DTLS for specific vhosts.
+  Previously it was only available in per-user or per-group config.
 
 
 * Version 1.4.1 (released 2026-02-28)

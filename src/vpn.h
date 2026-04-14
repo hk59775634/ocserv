@@ -381,6 +381,8 @@ struct cfg_st {
 	bool camouflage; /* [scope: vhost] */
 	char *camouflage_secret; /* [scope: vhost] */
 	char *camouflage_realm; /* [scope: vhost] */
+
+	bool no_udp; /* [scope: vhost user] */
 };
 
 /*
