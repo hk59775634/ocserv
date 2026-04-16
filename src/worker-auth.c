@@ -746,6 +746,13 @@ static int recv_cookie_auth_reply(worker_st *ws)
 				ws->groupname[0] = 0;
 			}
 
+			if (msg->session_id.len != sizeof(ws->session_id)) {
+				oclog(ws, LOG_ERR,
+				      "msg->session_id.len unexpected (%zu)",
+				      msg->session_id.len);
+				ret = ERR_AUTH_FAIL;
+				goto cleanup;
+			}
 			memcpy(ws->session_id, msg->session_id.data,
 			       msg->session_id.len);
 
@@ -812,8 +819,10 @@ static int recv_cookie_auth_reply(worker_st *ws)
 	ret = 0;
 cleanup:
 	if (ret < 0) {
-		/* we only release on error, as the user configuration
-		 * remains. */
+		/* msg is intentionally kept alive on success: ws->user_config
+		 * borrows a pointer into the unpacked protobuf message and must
+		 * remain valid for the lifetime of the worker session.  Only
+		 * free msg (and clear user_config) on the error path. */
 		auth_cookie_reply_msg__free_unpacked(msg, &pa);
 		ws->user_config = NULL;
 	}
@@ -915,7 +924,7 @@ int recv_auth_reply(worker_st *ws, int sd, char **txt, unsigned int *pcounter)
 		memcpy(ws->session_id, msg->dtls_session_id.data,
 		       msg->dtls_session_id.len);
 
-		if (txt)
+		if (txt && msg->msg)
 			*txt = talloc_strdup(ws, msg->msg);
 
 		break;

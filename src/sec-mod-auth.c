@@ -895,8 +895,11 @@ int handle_sec_auth_init(int cfd, sec_mod_st *sec, const SecAuthInitMsg *req,
 	session_start_time =
 		(time_t)req->session_start_time; // avoid time_t size problem
 
+	if (req->orig_remote_ip == NULL) {
+		seclog(sec, LOG_NOTICE, "missing remote IP in auth init");
+		return -1;
+	}
 	hmac_components[0].data = req->orig_remote_ip;
-	// req->ip is required and protobuf doesn't permit null for required parameters
 	hmac_components[0].length = strlen(req->orig_remote_ip);
 	hmac_components[1].data = req->our_ip;
 	hmac_components[1].length = req->our_ip ? strlen(req->our_ip) : 0;

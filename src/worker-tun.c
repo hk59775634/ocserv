@@ -68,16 +68,16 @@
 #ifdef TUN_AF_PREFIX
 ssize_t tun_write(int sockfd, const void *buf, size_t len)
 {
-	struct ip *iph = (void *)buf;
 	uint32_t head;
 	const uint8_t *data = buf;
+	uint8_t ip_v = data[0] >> 4;
 	static int complained;
 	struct iovec iov[2];
 	int ret;
 
-	if (iph->ip_v == 6)
+	if (ip_v == 6)
 		head = htonl(AF_INET6);
-	else if (iph->ip_v == 4)
+	else if (ip_v == 4)
 		head = htonl(AF_INET);
 	else {
 		if (!complained) {

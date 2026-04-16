@@ -71,6 +71,14 @@ void *sec_mod_client_db_init(sec_mod_st *sec)
 void sec_mod_client_db_deinit(sec_mod_st *sec)
 {
 	struct htable *db = sec->client_db;
+	client_entry_st *t;
+	struct htable_iter iter;
+
+	t = htable_first(db, &iter);
+	while (t != NULL) {
+		sec_auth_user_deinit(sec, t);
+		t = htable_next(db, &iter);
+	}
 
 	htable_clear(db);
 	talloc_free(db);

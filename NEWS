@@ -1,4 +1,11 @@
 * Version 1.4.2 (unreleased)
+- Hardened IPC message validation between worker, main, and sec-mod
+  processes: added missing upper-bound checks on message lengths and
+  buffer sizes, and NULL guards on optional protobuf fields (defense-in-depth).
+- Limited HTTP request body size to 256 KB to prevent unauthenticated
+  clients from exhausting worker process memory.
+- Fixed proxy protocol v2 client certificate CN never being
+  extracted.
 - Added VIRTUAL HOSTS and CONFIGURATION sections to ocserv(8) man page;
   documented options scope.
 - Setting a global-only option inside a [vhost:] section is now a hard

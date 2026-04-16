@@ -138,7 +138,8 @@ int handle_resume_store_req(sec_mod_st *sec,
 		return -1;
 	}
 
-	if (req->cli_addr.len == 0) {
+	if (req->cli_addr.len == 0 ||
+	    req->cli_addr.len > sizeof(struct sockaddr_storage)) {
 		seclog(sec, LOG_INFO, "invalid address length");
 		return -1;
 	}
