@@ -15,6 +15,7 @@ option('anyconnect-compat', type: 'feature', value: 'enabled',  description: 'Ci
 option('namespaces',        type: 'feature', value: 'enabled',  description: 'Linux network namespace support')
 option('utmp',              type: 'feature', value: 'auto',     description: 'utmp support via libutil')
 option('libwrap',           type: 'feature', value: 'auto',     description: 'TCP wrappers support via libwrap')
+option('sock-diag',         type: 'feature',  value: 'auto',    description: 'Use the sock_diag netlink subsystem for adaptive rate limiting')
 option('local-talloc',      type: 'boolean',  value: false,     description: 'Force use of bundled talloc')
 option('local-llhttp',      type: 'boolean',  value: true,      description: 'Use bundled llhttp (default); false to require system llhttp')
 option('local-protobuf',    type: 'boolean',  value: false,     description: 'Force use of bundled protobuf-c')

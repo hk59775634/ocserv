@@ -276,10 +276,21 @@ if not get_option('latency-stats').disabled()
                       prefix: '#include <time.h>\n#include <linux/errqueue.h>')
 endif
 
-adaptive_rate = cc.has_header('linux/netlink.h')   and \
-               cc.has_header('linux/rtnetlink.h')   and \
-               cc.has_header('linux/sock_diag.h')   and \
-               cc.has_header('linux/unix_diag.h')
+adaptive_rate = false
+adaptive_rate_option = get_option('sock-diag')
+if not adaptive_rate_option.disabled()
+  have_sockdiag_headers = (
+    cc.has_header('linux/netlink.h') and
+    cc.has_header('linux/rtnetlink.h') and
+    cc.has_header('linux/sock_diag.h') and
+    cc.has_header('linux/unix_diag.h')
+  )
+  if have_sockdiag_headers
+    adaptive_rate = true
+  elif adaptive_rate_option.enabled()
+    error('sock-diag requested but required headers not found')
+  endif
+endif
 
 proc_fs = fs.exists('/proc/self/exe')
 
