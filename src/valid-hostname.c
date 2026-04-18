@@ -27,11 +27,9 @@
 
 unsigned int valid_hostname(const char *host)
 {
-	const char *p;
+	const char *p = host;
 
-	p = host;
-
-	if (*p == '-')
+	if (p == NULL || *p == '\0' || *p == '-')
 		return 0;
 
 	while (*p != 0) {
@@ -39,6 +37,10 @@ unsigned int valid_hostname(const char *host)
 			return 0;
 		p++;
 	}
+
+	if (*(p - 1) == '-')
+		return 0;
+
 	return 1;
 }
 

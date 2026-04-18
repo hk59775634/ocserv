@@ -46,6 +46,7 @@ int main(void)
 	assert(test_valid_hostname(".local") == 0);
 	assert(test_valid_hostname(".abc.def") == 0);
 	assert(test_valid_hostname("-hello") == 0);
+	assert(test_valid_hostname("hello-") == 0);
 	assert(test_valid_hostname("1234!") == 0);
 	assert(test_valid_hostname("1234#abc") == 0);
 	assert(test_valid_hostname("1234$abc") == 0);
@@ -56,7 +57,6 @@ int main(void)
 
 	/* check valid hostnames */
 	assert(test_valid_hostname("12-hello") != 0);
-	assert(test_valid_hostname("1234abc-") != 0);
 	assert(test_valid_hostname("1234abc-ABC") != 0);
 	assert(test_valid_hostname("ABC-abc1") != 0);
 	assert(test_valid_hostname("12345") != 0);
