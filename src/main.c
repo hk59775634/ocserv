@@ -716,14 +716,14 @@ static int forward_udp_to_owner(main_server_st *s, struct listener_st *listener)
 
 	if (s->msg_buffer[0] != 22) {
 		mslog(s, NULL, LOG_DEBUG,
-		      "%s: unexpected DTLS content type: %u; possibly a firewall disassociated a UDP session",
+		      "%s: unexpected DTLS content type: %u; likely a stale packet from a closed session or expired NAT mapping",
 		      human_addr((struct sockaddr *)&cli_addr, cli_addr_size,
 				 tbuf, sizeof(tbuf)),
 		      (unsigned int)s->msg_buffer[0]);
-		/* Here we received a non-client-hello packet. It may be that
-		 * the client's NAT changed its UDP source port and the previous
-		 * connection is invalidated. Try to see if we can simply match
-		 * the IP address and forward the socket.
+		/* Here we received a non-client-hello packet. This could be an in-flight
+		 * packet destined to the worker that recently terminated, or a client whose
+		 * NAT changed its UDP source port, invalidating the previous connection.
+		 * Try to see if we can simply match the IP address and forward the socket.
 		 */
 		match_ip_only = 1;
 	} else {
@@ -767,6 +767,13 @@ static int forward_udp_to_owner(main_server_st *s, struct listener_st *listener)
 	}
 
 	if (proc_to_send != 0) {
+		/* Avoid race between AUTH_COOKIE_REP and CMD_UDP_FD messages */
+		if (proc_to_send->status != PS_AUTH_COMPLETED) {
+			mslog(s, proc_to_send, LOG_DEBUG,
+			      "Discarding DTLS packet; the client is not authenticated yet");
+			goto fail;
+		}
+
 		if (GETPCONFIG(s)->udp_port == 0 ||
 		    proc_to_send->config->no_udp) {
 			mslog(s, proc_to_send, LOG_WARNING,
