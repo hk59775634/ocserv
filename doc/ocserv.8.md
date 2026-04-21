@@ -119,6 +119,9 @@ directory. Values found there override the corresponding values from the
 active virtual host configuration for that session only; they do not affect
 other connected users.
 
+Ocserv rereads these files when the user is connected, so there is no need
+to reload ocserv after you modify per-user or per-group configuration.
+
 Options not specified within a virtual host, or within a per-user/group file,
 fall back to the global configuration value, or to the built-in default if
 not set globally.
