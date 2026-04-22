@@ -25,6 +25,12 @@
 #include <ctype.h>
 #include <arpa/inet.h>
 
+/* Validates a single hostname label per RFC 952 as updated by RFC 1123:
+ *  - first character: letter or digit (RFC 1123 relaxes RFC 952's letter-only rule)
+ *  - interior characters: letters, digits, or hyphens
+ *  - last character: letter or digit (no trailing hyphen)
+ *  - maximum label length: 63 characters (RFC 1123 §2.1)
+ */
 unsigned int valid_hostname(const char *host)
 {
 	const char *p = host;
@@ -39,6 +45,9 @@ unsigned int valid_hostname(const char *host)
 	}
 
 	if (*(p - 1) == '-')
+		return 0;
+
+	if ((p - host) > 63)
 		return 0;
 
 	return 1;

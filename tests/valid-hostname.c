@@ -54,8 +54,14 @@ int main(void)
 	assert(test_valid_hostname("1234|abc") == 0);
 	assert(test_valid_hostname("1234\aabc") == 0);
 	assert(test_valid_hostname("1234\babc") == 0);
+	/* 64-character label exceeds RFC 1123 §2.1 limit of 63 */
+	assert(test_valid_hostname("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+				   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") == 0);
 
 	/* check valid hostnames */
+	/* 63-character label is the maximum allowed by RFC 1123 §2.1 */
+	assert(test_valid_hostname("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+				   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") != 0);
 	assert(test_valid_hostname("12-hello") != 0);
 	assert(test_valid_hostname("1234abc-ABC") != 0);
 	assert(test_valid_hostname("ABC-abc1") != 0);
