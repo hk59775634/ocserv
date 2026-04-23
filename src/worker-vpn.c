@@ -277,7 +277,7 @@ static int setup_dtls_psk_keys(gnutls_session_t session, struct worker_st *ws)
 		return -1;
 	}
 
-	if (WSCONFIG(ws)->match_dtls_and_tls) {
+	if (WSRCONFIG(ws)->match_dtls_and_tls) {
 		cipher = gnutls_cipher_get(ws->session);
 		mac = gnutls_mac_get(ws->session);
 
@@ -285,14 +285,14 @@ static int setup_dtls_psk_keys(gnutls_session_t session, struct worker_st *ws)
 			prio_string, sizeof(prio_string),
 			"%s:" VERS_STRING
 			":-CIPHER-ALL:-MAC-ALL:-KX-ALL:+PSK:+VERS-DTLS-ALL:+%s:+%s",
-			WSCONFIG(ws)->priorities, gnutls_mac_get_name(mac),
+			WSRCONFIG(ws)->priorities, gnutls_mac_get_name(mac),
 			gnutls_cipher_get_name(cipher));
 	} else {
 		/* if we haven't an associated session, enable all ciphers we would have enabled
 		 * otherwise for TLS. */
 		snprintf(prio_string, sizeof(prio_string),
 			 "%s:" VERS_STRING ":-KX-ALL:+PSK:+VERS-DTLS-ALL",
-			 WSCONFIG(ws)->priorities);
+			 WSRCONFIG(ws)->priorities);
 	}
 
 	ret = gnutls_priority_set_direct(session, prio_string, NULL);
@@ -397,7 +397,7 @@ static int setup_dtls_connection(struct worker_st *ws, struct dtls_st *dtls)
 		oclog(ws, LOG_INFO, "setting up DTLS-PSK connection");
 		ret = setup_dtls_psk_keys(session, ws);
 	} else {
-		if (!WSCONFIG(ws)->dtls_legacy) {
+		if (!WSRCONFIG(ws)->dtls_legacy) {
 			oclog(ws, LOG_INFO,
 			      "CISCO client compatibility (dtls-legacy) is disabled; will not setup a DTLS session");
 			goto fail;
@@ -436,8 +436,8 @@ static int setup_dtls_connection(struct worker_st *ws, struct dtls_st *dtls)
 #endif
 
 	/* Setup the fd settings */
-	if (WSCONFIG(ws)->output_buffer > 0) {
-		int t = MIN(2048, ws->link_mtu * WSCONFIG(ws)->output_buffer);
+	if (WSRCONFIG(ws)->output_buffer > 0) {
+		int t = MIN(2048, ws->link_mtu * WSRCONFIG(ws)->output_buffer);
 
 		ret = setsockopt(dtls->dtls_tptr.fd, SOL_SOCKET, SO_SNDBUF, &t,
 				 sizeof(t));
@@ -477,14 +477,14 @@ void ws_add_score_to_ip(worker_st *ws, unsigned int points, unsigned int final,
 	PROTOBUF_ALLOCATOR(pa, ws);
 
 	/* no reporting if banning is disabled */
-	if (WSCONFIG(ws)->max_ban_score == 0)
+	if (WSRCONFIG(ws)->max_ban_score == 0)
 		return;
 
 	/* In final call, no score added, we simply send */
 	if (final == 0) {
 		ws->ban_points += points;
 		/* do not use IPC for small values */
-		if (points < WSCONFIG(ws)->ban_points_wrong_password)
+		if (points < WSRCONFIG(ws)->ban_points_wrong_password)
 			return;
 	}
 
@@ -528,7 +528,7 @@ static void send_stats_to_secmod(worker_st *ws, time_t now,
 	int sd, ret, e;
 
 	/* this is only used by certain tests */
-	if (WSPCONFIG(ws)->debug_no_secmod_stats != 0)
+	if (WSSCONFIG(ws)->debug_no_secmod_stats != 0)
 		return;
 
 	ws->last_stats_msg = now;
@@ -645,17 +645,17 @@ void exit_worker_reason(worker_st *ws, unsigned int reason)
 		pos += 1 + _s;            \
 	}
 
-#define SET_VHOST_CREDS                                                        \
-	do {                                                                   \
-		ret = gnutls_credentials_set(session, GNUTLS_CRD_CERTIFICATE,  \
-					     WSCREDS(ws)->xcred);              \
-		GNUTLS_FATAL_ERR(ret);                                         \
-		gnutls_certificate_server_set_request(session,                 \
-						      WSCONFIG(ws)->cert_req); \
-		ret = gnutls_priority_set(session, WSCREDS(ws)->cprio);        \
-		GNUTLS_FATAL_ERR(ret);                                         \
-		gnutls_db_set_cache_expiration(                                \
-			session, TLS_SESSION_EXPIRATION_TIME(WSCONFIG(ws)));   \
+#define SET_VHOST_CREDS                                                       \
+	do {                                                                  \
+		ret = gnutls_credentials_set(session, GNUTLS_CRD_CERTIFICATE, \
+					     WSCREDS(ws)->xcred);             \
+		GNUTLS_FATAL_ERR(ret);                                        \
+		gnutls_certificate_server_set_request(                        \
+			session, WSRCONFIG(ws)->cert_req);                    \
+		ret = gnutls_priority_set(session, WSCREDS(ws)->cprio);       \
+		GNUTLS_FATAL_ERR(ret);                                        \
+		gnutls_db_set_cache_expiration(                               \
+			session, TLS_SESSION_EXPIRATION_TIME(WSRCONFIG(ws))); \
 	} while (0)
 
 /* Parse the TLS client hello to figure vhost */
@@ -809,7 +809,7 @@ fallback:
 
 static void check_camouflage_url(struct worker_st *ws)
 {
-	if (WSCONFIG(ws)->camouflage_secret == NULL)
+	if (WSRCONFIG(ws)->camouflage_secret == NULL)
 		return;
 
 	if (ws->auth_state >= S_AUTH_COOKIE) {
@@ -819,8 +819,8 @@ static void check_camouflage_url(struct worker_st *ws)
 
 	char *url_camouflage_part = strchr(ws->req.url, '?');
 
-	if (url_camouflage_part &&
-	    !strcmp(url_camouflage_part + 1, WSCONFIG(ws)->camouflage_secret)) {
+	if (url_camouflage_part && !strcmp(url_camouflage_part + 1,
+					   WSRCONFIG(ws)->camouflage_secret)) {
 		*url_camouflage_part = '\0';
 		ws->camouflage_check_passed = 1;
 	}
@@ -859,16 +859,16 @@ void vpn_server(struct worker_st *ws)
 	ocsignal(SIGALRM, handle_alarm);
 
 	global_ws = ws;
-	if (GETCONFIG(ws)->auth_timeout) {
+	if (GETRCONFIG(ws)->auth_timeout) {
 		terminate_reason = REASON_SERVER_DISCONNECT;
-		alarm(GETCONFIG(ws)->auth_timeout);
+		alarm(GETRCONFIG(ws)->auth_timeout);
 	}
 
 	/* do not allow this process to be traced. That
 	 * prevents worker processes tracing each other. */
-	if (GETPCONFIG(ws)->pr_dumpable != 1)
+	if (GETSCONFIG(ws)->pr_dumpable != 1)
 		pr_set_undumpable("worker");
-	if (GETCONFIG(ws)->isolate != 0) {
+	if (GETRCONFIG(ws)->isolate != 0) {
 		ret = disable_system_calls(ws);
 		if (ret < 0) {
 			oclog(ws, LOG_INFO,
@@ -881,7 +881,7 @@ void vpn_server(struct worker_st *ws)
 	else
 		ws->proto = AF_INET6;
 
-	if (GETCONFIG(ws)->listen_proxy_proto) {
+	if (GETRCONFIG(ws)->listen_proxy_proto) {
 		oclog(ws, LOG_DEBUG, "accepted proxy protocol connection");
 		ret = parse_proxy_proto_header(ws, ws->conn_fd);
 		if (ret < 0) {
@@ -960,7 +960,7 @@ void vpn_server(struct worker_st *ws)
 
 	llhttp_settings_init(&settings);
 
-	ws->selected_auth = &WSPCONFIG(ws)->auth[0];
+	ws->selected_auth = &WSSCONFIG(ws)->auth[0];
 	if (ws->cert_auth_ok)
 		ws_switch_auth_to(ws, AUTH_TYPE_CERTIFICATE);
 
@@ -972,7 +972,7 @@ void vpn_server(struct worker_st *ws)
 	settings.on_body = http_body_cb;
 	http_req_init(ws);
 
-	if (WSCONFIG(ws)->listen_proxy_proto) {
+	if (WSRCONFIG(ws)->listen_proxy_proto) {
 		oclog(ws, LOG_DEBUG, "proxy-hdr: peer is %s\n",
 		      ws->remote_ip_str);
 	}
@@ -1013,14 +1013,14 @@ restart:
 	} while (ws->req.headers_complete == 0);
 
 	if ((parser.method == HTTP_GET || parser.method == HTTP_POST) &&
-	    (WSCONFIG(ws)->camouflage && ws->camouflage_check_passed == 0)) {
+	    (WSRCONFIG(ws)->camouflage && ws->camouflage_check_passed == 0)) {
 		check_camouflage_url(ws);
 		if (ws->camouflage_check_passed == 0) {
 			oclog(ws, LOG_INFO,
 			      "Secret not found in URL, declining...");
-			if (WSCONFIG(ws)->camouflage_realm)
+			if (WSRCONFIG(ws)->camouflage_realm)
 				response_401(ws, parser.http_minor,
-					     WSCONFIG(ws)->camouflage_realm);
+					     WSRCONFIG(ws)->camouflage_realm);
 			else
 				response_404(ws, parser.http_minor);
 			goto finish;
@@ -1125,7 +1125,7 @@ static void session_info_send(worker_st *ws)
 			msg.dtls_compr = (char *)ws->dtls_selected_comp->name;
 	}
 
-	if (WSCONFIG(ws)->listen_proxy_proto) {
+	if (WSRCONFIG(ws)->listen_proxy_proto) {
 		msg.our_addr.data = (uint8_t *)&ws->our_addr;
 		msg.our_addr.len = ws->our_addr_len;
 		msg.has_our_addr = 1;
@@ -1187,7 +1187,7 @@ static void disable_mtu_disc(worker_st *ws, struct dtls_st *dtls)
 	oclog(ws, LOG_DEBUG, "disabling MTU discovery on UDP socket");
 	set_mtu_disc(dtls->dtls_tptr.fd, ws->proto, 0);
 	link_mtu_set(ws, dtls, ws->adv_link_mtu);
-	WSCONFIG(ws)->try_mtu = 0;
+	WSRCONFIG(ws)->try_mtu = 0;
 }
 
 /* sets the current value of mtu as bad,
@@ -1197,7 +1197,7 @@ static void disable_mtu_disc(worker_st *ws, struct dtls_st *dtls)
  */
 static int mtu_not_ok(worker_st *ws, struct dtls_st *dtls)
 {
-	if (WSCONFIG(ws)->try_mtu == 0 || dtls->dtls_session == NULL)
+	if (WSRCONFIG(ws)->try_mtu == 0 || dtls->dtls_session == NULL)
 		return 0;
 
 	if (ws->proto == AF_INET) {
@@ -1272,7 +1272,7 @@ static void mtu_discovery_init(worker_st *ws, struct dtls_st *dtls,
 		disable_mtu_disc(ws, dtls);
 	}
 
-	if (!WSCONFIG(ws)->try_mtu)
+	if (!WSRCONFIG(ws)->try_mtu)
 		oclog(ws, LOG_DEBUG,
 		      "Initializing MTU discovery; initial MTU: %u\n", mtu);
 
@@ -1284,7 +1284,7 @@ static void mtu_ok(worker_st *ws, struct dtls_st *dtls)
 {
 	unsigned int c;
 
-	if (WSCONFIG(ws)->try_mtu == 0 || ws->proto == AF_INET6)
+	if (WSRCONFIG(ws)->try_mtu == 0 || ws->proto == AF_INET6)
 		return;
 
 	if (ws->last_bad_mtu == (ws->link_mtu) + 1 ||
@@ -1357,8 +1357,8 @@ static int periodic_check(worker_st *ws, struct timespec *tnow,
 	terminate_reason = REASON_SERVER_DISCONNECT;
 	alarm(1800);
 
-	if (WSCONFIG(ws)->idle_timeout > 0) {
-		if (now - ws->last_nc_msg > WSCONFIG(ws)->idle_timeout) {
+	if (WSRCONFIG(ws)->idle_timeout > 0) {
+		if (now - ws->last_nc_msg > WSRCONFIG(ws)->idle_timeout) {
 			oclog(ws, LOG_ERR,
 			      "idle timeout reached for process (%d secs)",
 			      (int)(now - ws->last_nc_msg));
@@ -1525,7 +1525,7 @@ static int dtls_mainloop(worker_st *ws, struct dtls_st *dtls,
 		if (ret == GNUTLS_E_REHANDSHAKE) {
 			if (dtls->last_dtls_rehandshake > 0 &&
 			    tnow->tv_sec - dtls->last_dtls_rehandshake <
-				    WSCONFIG(ws)->rekey_time / 2) {
+				    WSRCONFIG(ws)->rekey_time / 2) {
 				oclog(ws, LOG_INFO,
 				      "client requested DTLS rehandshake too soon");
 				ret = -1;
@@ -1681,7 +1681,7 @@ static int tls_mainloop(struct worker_st *ws, struct timespec *tnow)
 		/* rekey? */
 		if (ws->last_tls_rehandshake > 0 &&
 		    tnow->tv_sec - ws->last_tls_rehandshake <
-			    WSCONFIG(ws)->rekey_time / 2) {
+			    WSRCONFIG(ws)->rekey_time / 2) {
 			oclog(ws, LOG_INFO,
 			      "client requested TLS rehandshake too soon");
 			ret = -1;
@@ -1758,10 +1758,10 @@ static int tun_mainloop(struct worker_st *ws, struct timespec *tnow)
 	cstp_to_send.data = ws->buffer;
 	cstp_to_send.size = l;
 
-	if (WSCONFIG(ws)->switch_to_tcp_timeout &&
+	if (WSRCONFIG(ws)->switch_to_tcp_timeout &&
 	    DTLS_ACTIVE(ws)->udp_state == UP_ACTIVE &&
 	    tnow->tv_sec >
-		    ws->udp_recv_time + WSCONFIG(ws)->switch_to_tcp_timeout) {
+		    ws->udp_recv_time + WSRCONFIG(ws)->switch_to_tcp_timeout) {
 		oclog(ws, LOG_DEBUG,
 		      "No UDP data received for %li seconds, using TCP instead\n",
 		      tnow->tv_sec - ws->udp_recv_time);
@@ -1771,7 +1771,7 @@ static int tun_mainloop(struct worker_st *ws, struct timespec *tnow)
 #ifdef ENABLE_COMPRESSION
 	if (DTLS_ACTIVE(ws)->udp_state == UP_ACTIVE &&
 	    ws->dtls_selected_comp != NULL &&
-	    l > WSCONFIG(ws)->no_compress_limit) {
+	    l > WSRCONFIG(ws)->no_compress_limit) {
 		/* otherwise don't compress */
 		ret = ws->dtls_selected_comp->compress(ws->decomp + 8,
 						       sizeof(ws->decomp) - 8,
@@ -1793,7 +1793,7 @@ static int tun_mainloop(struct worker_st *ws, struct timespec *tnow)
 			}
 		}
 	} else if (ws->cstp_selected_comp != NULL &&
-		   l > WSCONFIG(ws)->no_compress_limit) {
+		   l > WSRCONFIG(ws)->no_compress_limit) {
 		/* otherwise don't compress */
 		ret = ws->cstp_selected_comp->compress(ws->decomp + 8,
 						       sizeof(ws->decomp) - 8,
@@ -1830,7 +1830,7 @@ static int tun_mainloop(struct worker_st *ws, struct timespec *tnow)
 				      "retrying (TLS) %d\n", l);
 				tls_retry = 1;
 			} else if (ret >= 1 + DATA_MTU(ws, ws->link_mtu) &&
-				   WSCONFIG(ws)->try_mtu != 0) {
+				   WSRCONFIG(ws)->try_mtu != 0) {
 				mtu_ok(ws, DTLS_ACTIVE(ws));
 			}
 		}
@@ -2059,7 +2059,8 @@ static int connect_handler(worker_st *ws)
 		exit_worker(ws);
 	}
 
-	if (WSCONFIG(ws)->network.name[0] == 0) {
+	if (WSRCONFIG(ws)->network->name == NULL ||
+	    WSRCONFIG(ws)->network->name[0] == 0) {
 		oclog(ws, LOG_ERR,
 		      "no networks are configured; rejecting client");
 		cstp_puts(ws, "HTTP/1.1 503 Service Unavailable\r\n");
@@ -2082,10 +2083,10 @@ static int connect_handler(worker_st *ws)
 			sizeof(ws->req.hostname));
 	}
 
-	FUZZ(WSCONFIG(ws)->rekey_time, 30, rnd);
+	FUZZ(WSRCONFIG(ws)->rekey_time, 30, rnd);
 
 	/* Connected. Turn of the alarm */
-	if (WSCONFIG(ws)->auth_timeout)
+	if (WSRCONFIG(ws)->auth_timeout)
 		alarm(0);
 	http_req_deinit(ws);
 
@@ -2104,7 +2105,8 @@ static int connect_handler(worker_st *ws)
 
 	if (req->is_mobile) {
 		ws->user_config->dpd = ws->user_config->mobile_dpd;
-		WSCONFIG(ws)->idle_timeout = WSCONFIG(ws)->mobile_idle_timeout;
+		WSRCONFIG(ws)->idle_timeout =
+			WSRCONFIG(ws)->mobile_idle_timeout;
 	}
 
 	/* Notify back the client about the accepted hostname */
@@ -2121,9 +2123,9 @@ static int connect_handler(worker_st *ws)
 		SEND_ERR(ret);
 	}
 
-	if (WSCONFIG(ws)->default_domain) {
+	if (WSRCONFIG(ws)->default_domain) {
 		ret = cstp_printf(ws, "X-CSTP-Default-Domain: %s\r\n",
-				  WSCONFIG(ws)->default_domain);
+				  WSRCONFIG(ws)->default_domain);
 		SEND_ERR(ret);
 	}
 
@@ -2131,7 +2133,7 @@ static int connect_handler(worker_st *ws)
 	DTLS_ACTIVE(ws)->udp_state = UP_DISABLED;
 	DTLS_INACTIVE(ws)->udp_state = UP_DISABLED;
 
-	if (WSPCONFIG(ws)->udp_port != 0 && !WSCONFIG(ws)->no_udp &&
+	if (WSSCONFIG(ws)->udp_port != 0 && !WSRCONFIG(ws)->no_udp &&
 	    req->master_secret_set != 0) {
 		memcpy(ws->master_secret, req->master_secret, TLS_MASTER_SIZE);
 		DTLS_ACTIVE(ws)->udp_state = UP_WAIT_FD;
@@ -2319,17 +2321,17 @@ static int connect_handler(worker_st *ws)
 
 	} else {
 		/* default route */
-		WSCONFIG(ws)->tunnel_all_dns = 1;
+		WSRCONFIG(ws)->tunnel_all_dns = 1;
 	}
 
-	if (WSCONFIG(ws)->tunnel_all_dns) {
+	if (WSRCONFIG(ws)->tunnel_all_dns) {
 		ret = cstp_puts(ws, "X-CSTP-Tunnel-All-DNS: true\r\n");
 	} else {
 		ret = cstp_puts(ws, "X-CSTP-Tunnel-All-DNS: false\r\n");
 	}
 	SEND_ERR(ret);
 
-	if (WSCONFIG(ws)->client_bypass_protocol) {
+	if (WSRCONFIG(ws)->client_bypass_protocol) {
 		ret = cstp_puts(ws, "X-CSTP-Client-Bypass-Protocol: true\r\n");
 	} else {
 		ret = cstp_puts(ws, "X-CSTP-Client-Bypass-Protocol: false\r\n");
@@ -2344,9 +2346,9 @@ static int connect_handler(worker_st *ws)
 			  ws->user_config->keepalive);
 	SEND_ERR(ret);
 
-	if (WSCONFIG(ws)->idle_timeout > 0) {
+	if (WSRCONFIG(ws)->idle_timeout > 0) {
 		ret = cstp_printf(ws, "X-CSTP-Idle-Timeout: %u\r\n",
-				  (unsigned int)WSCONFIG(ws)->idle_timeout);
+				  (unsigned int)WSRCONFIG(ws)->idle_timeout);
 	} else {
 		ret = cstp_puts(ws, "X-CSTP-Idle-Timeout: none\r\n");
 	}
@@ -2355,23 +2357,23 @@ static int connect_handler(worker_st *ws)
 	ret = cstp_puts(ws, "X-CSTP-Smartcard-Removal-Disconnect: true\r\n");
 	SEND_ERR(ret);
 
-	if (WSCONFIG(ws)->is_dyndns != 0) {
+	if (WSRCONFIG(ws)->is_dyndns != 0) {
 		ret = cstp_puts(ws, "X-CSTP-DynDNS: true\r\n");
 		SEND_ERR(ret);
 	}
 
-	if (WSCONFIG(ws)->rekey_time > 0) {
+	if (WSRCONFIG(ws)->rekey_time > 0) {
 		unsigned int method;
 
 		ret = cstp_printf(ws, "X-CSTP-Rekey-Time: %u\r\n",
-				  (unsigned int)(WSCONFIG(ws)->rekey_time));
+				  (unsigned int)(WSRCONFIG(ws)->rekey_time));
 		SEND_ERR(ret);
 
 		/* if the peer isn't patched for safe renegotiation, always
 		 * require him to open a new tunnel. */
 		if (ws->session != NULL &&
 		    gnutls_safe_renegotiation_status(ws->session) != 0)
-			method = WSCONFIG(ws)->rekey_method;
+			method = WSRCONFIG(ws)->rekey_method;
 		else
 			method = REKEY_METHOD_NEW_TUNNEL;
 
@@ -2384,8 +2386,8 @@ static int connect_handler(worker_st *ws)
 		SEND_ERR(ret);
 	}
 
-	if (WSCONFIG(ws)->proxy_url != NULL) {
-		char *url = replace_vals(ws, WSCONFIG(ws)->proxy_url);
+	if (WSRCONFIG(ws)->proxy_url != NULL) {
+		char *url = replace_vals(ws, WSRCONFIG(ws)->proxy_url);
 
 		if (url != NULL) {
 			ret = cstp_printf(
@@ -2416,8 +2418,8 @@ static int connect_handler(worker_st *ws)
 			    "X-CSTP-License: accept\r\n");
 	SEND_ERR(ret);
 
-	for (i = 0; i < WSCONFIG(ws)->custom_header_size; i++) {
-		char *h = replace_vals(ws, WSCONFIG(ws)->custom_header[i]);
+	for (i = 0; i < WSRCONFIG(ws)->n_custom_header; i++) {
+		char *h = replace_vals(ws, WSRCONFIG(ws)->custom_header[i]);
 
 		if (h) {
 			oclog(ws, LOG_INFO, "adding custom header '%s'", h);
@@ -2428,9 +2430,9 @@ static int connect_handler(worker_st *ws)
 	}
 
 	/* set TCP socket options */
-	if (WSCONFIG(ws)->output_buffer > 0) {
+	if (WSRCONFIG(ws)->output_buffer > 0) {
 		t = ws->link_mtu;
-		t *= WSCONFIG(ws)->output_buffer;
+		t *= WSRCONFIG(ws)->output_buffer;
 
 		ret = setsockopt(ws->conn_fd, SOL_SOCKET, SO_SNDBUF, &t,
 				 sizeof(t));
@@ -2452,17 +2454,17 @@ static int connect_handler(worker_st *ws)
 		}
 
 		ret = cstp_printf(ws, "X-DTLS-Port: %u\r\n",
-				  WSPCONFIG(ws)->udp_port);
+				  WSSCONFIG(ws)->udp_port);
 		SEND_ERR(ret);
 
-		if (WSCONFIG(ws)->rekey_time > 0) {
+		if (WSRCONFIG(ws)->rekey_time > 0) {
 			ret = cstp_printf(
 				ws, "X-DTLS-Rekey-Time: %u\r\n",
-				(unsigned int)(WSCONFIG(ws)->rekey_time + 10));
+				(unsigned int)(WSRCONFIG(ws)->rekey_time + 10));
 			SEND_ERR(ret);
 
 			/* This is our private extension */
-			if (WSCONFIG(ws)->rekey_method == REKEY_METHOD_SSL) {
+			if (WSRCONFIG(ws)->rekey_method == REKEY_METHOD_SSL) {
 				ret = cstp_puts(ws,
 						"X-DTLS-Rekey-Method: ssl\r\n");
 				SEND_ERR(ret);
@@ -2479,7 +2481,7 @@ static int connect_handler(worker_st *ws)
 			p += 2;
 		}
 
-		if (ws->req.use_psk || !WSCONFIG(ws)->dtls_legacy) {
+		if (ws->req.use_psk || !WSRCONFIG(ws)->dtls_legacy) {
 			oclog(ws, LOG_INFO, "X-DTLS-App-ID: %s", ws->buffer);
 
 			ret = cstp_printf(ws, "X-DTLS-App-ID: %s\r\n",
@@ -2538,9 +2540,9 @@ static int connect_handler(worker_st *ws)
 
 	data_mtu_send(ws, DATA_MTU(ws, ws->link_mtu));
 
-	if (WSCONFIG(ws)->banner) {
+	if (WSRCONFIG(ws)->banner) {
 		ret = cstp_printf(ws, "X-CSTP-Banner: %s\r\n",
-				  WSCONFIG(ws)->banner);
+				  WSRCONFIG(ws)->banner);
 		SEND_ERR(ret);
 	}
 

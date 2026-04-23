@@ -123,10 +123,10 @@ int ws_switch_auth_to(struct worker_st *ws, unsigned int auth)
 	    ws->selected_auth->type & auth)
 		return 1;
 
-	for (i = 0; i < WSPCONFIG(ws)->auth_methods; i++) {
-		if (WSPCONFIG(ws)->auth[i].enabled &&
-		    (WSPCONFIG(ws)->auth[i].type & auth) != 0) {
-			ws->selected_auth = &WSPCONFIG(ws)->auth[i];
+	for (i = 0; i < WSSCONFIG(ws)->auth_methods; i++) {
+		if (WSSCONFIG(ws)->auth[i].enabled &&
+		    (WSSCONFIG(ws)->auth[i].type & auth) != 0) {
+			ws->selected_auth = &WSSCONFIG(ws)->auth[i];
 			return 1;
 		}
 	}
@@ -146,10 +146,10 @@ int ws_switch_auth_to_next(struct worker_st *ws)
 
 	ws->selected_auth->enabled = 0;
 
-	for (i = 0; i < WSPCONFIG(ws)->auth_methods; i++) {
-		if (&WSPCONFIG(ws)->auth[i] != ws->selected_auth &&
-		    WSPCONFIG(ws)->auth[i].enabled != 0) {
-			ws->selected_auth = &WSPCONFIG(ws)->auth[i];
+	for (i = 0; i < WSSCONFIG(ws)->auth_methods; i++) {
+		if (&WSSCONFIG(ws)->auth[i] != ws->selected_auth &&
+		    WSSCONFIG(ws)->auth[i].enabled != 0) {
+			ws->selected_auth = &WSSCONFIG(ws)->auth[i];
 			return 1;
 		}
 	}
@@ -162,12 +162,12 @@ static int append_group_idx(worker_st *ws, str_st *str, unsigned int i)
 	const char *name;
 	const char *value;
 
-	value = WSCONFIG(ws)->group_list[i];
-	if (WSCONFIG(ws)->friendly_group_list != NULL &&
-	    WSCONFIG(ws)->friendly_group_list[i] != NULL)
-		name = WSCONFIG(ws)->friendly_group_list[i];
+	value = WSRCONFIG(ws)->group_list[i];
+	if (WSRCONFIG(ws)->friendly_group_list != NULL &&
+	    WSRCONFIG(ws)->friendly_group_list[i] != NULL)
+		name = WSRCONFIG(ws)->friendly_group_list[i];
 	else
-		name = WSCONFIG(ws)->group_list[i];
+		name = WSRCONFIG(ws)->group_list[i];
 
 	snprintf(temp, sizeof(temp), "<option value=\"%s\">%s</option>\n",
 		 value, name);
@@ -186,12 +186,12 @@ static int append_group_str(worker_st *ws, str_st *str, const char *group)
 
 	value = name = group;
 
-	if (WSCONFIG(ws)->friendly_group_list) {
-		for (i = 0; i < WSCONFIG(ws)->group_list_size; i++) {
-			if (strcmp(WSCONFIG(ws)->group_list[i], group) == 0) {
-				if (WSCONFIG(ws)->friendly_group_list[i] !=
+	if (WSRCONFIG(ws)->friendly_group_list) {
+		for (i = 0; i < WSRCONFIG(ws)->n_group_list; i++) {
+			if (strcmp(WSRCONFIG(ws)->group_list[i], group) == 0) {
+				if (WSRCONFIG(ws)->friendly_group_list[i] !=
 				    NULL)
-					name = WSCONFIG(ws)
+					name = WSRCONFIG(ws)
 						       ->friendly_group_list[i];
 				break;
 			}
@@ -256,7 +256,7 @@ int get_auth_handler2(worker_st *ws, unsigned int http_ver, const char *pmsg,
 			ws,
 			"Set-Cookie: webvpncontext=%s; Max-Age=%lu; Secure; HttpOnly\r\n",
 			context,
-			(unsigned long int)WSCONFIG(ws)->cookie_timeout);
+			(unsigned long int)WSRCONFIG(ws)->cookie_timeout);
 		if (ret < 0)
 			return -1;
 
@@ -325,9 +325,10 @@ int get_auth_handler2(worker_st *ws, unsigned int http_ver, const char *pmsg,
 			goto cleanup;
 		}
 
-		if (WSCONFIG(ws)->pre_login_banner) {
-			ret = str_append_printf(&str, "<banner>%s</banner>",
-						WSCONFIG(ws)->pre_login_banner);
+		if (WSRCONFIG(ws)->pre_login_banner) {
+			ret = str_append_printf(
+				&str, "<banner>%s</banner>",
+				WSRCONFIG(ws)->pre_login_banner);
 			if (ret < 0) {
 				ret = -1;
 				goto cleanup;
@@ -367,7 +368,7 @@ int get_auth_handler2(worker_st *ws, unsigned int http_ver, const char *pmsg,
 		}
 
 		/* send groups */
-		if (WSCONFIG(ws)->group_list_size > 0 ||
+		if (WSRCONFIG(ws)->n_group_list > 0 ||
 		    ws->cert_groups_size > 0) {
 			ret = str_append_str(
 				&str,
@@ -392,10 +393,10 @@ int get_auth_handler2(worker_st *ws, unsigned int http_ver, const char *pmsg,
 
 			/* we send a list of possible groups only if user is not forcing group e.g. by url to disable dialog on client side */
 			if (ws->groupname[0] == 0 &&
-			    WSCONFIG(ws)->default_select_group) {
+			    WSRCONFIG(ws)->default_select_group) {
 				ret = str_append_printf(
 					&str, "<option>%s</option>\n",
-					WSCONFIG(ws)->default_select_group);
+					WSRCONFIG(ws)->default_select_group);
 				if (ret < 0) {
 					ret = -1;
 					goto cleanup;
@@ -410,10 +411,10 @@ int get_auth_handler2(worker_st *ws, unsigned int http_ver, const char *pmsg,
 				for (i = 0; i < ws->cert_groups_size; i++) {
 					dup = 0;
 					for (j = 0;
-					     j < WSCONFIG(ws)->group_list_size;
+					     j < WSRCONFIG(ws)->n_group_list;
 					     j++) {
 						if (strcmp(ws->cert_groups[i],
-							   WSCONFIG(ws)->group_list
+							   WSRCONFIG(ws)->group_list
 								   [j]) == 0) {
 							dup = 1;
 							break;
@@ -440,11 +441,12 @@ int get_auth_handler2(worker_st *ws, unsigned int http_ver, const char *pmsg,
 
 			/* we send a list of possible groups only if user is not forcing group e.g. by url to disable dialog on client side */
 			if (ws->groupname[0] == 0) {
-				for (i = 0; i < WSCONFIG(ws)->group_list_size;
+				for (i = 0; i < WSRCONFIG(ws)->n_group_list;
 				     i++) {
 					if (ws->groupname[0] != 0 &&
 					    strcmp(ws->groupname,
-						   WSCONFIG(ws)->group_list[i]) ==
+						   WSRCONFIG(ws)
+							   ->group_list[i]) ==
 						    0)
 						continue;
 
@@ -530,7 +532,7 @@ static int get_cert_username(worker_st *ws, gnutls_x509_crt_t crt)
 	unsigned int i;
 	int ret;
 
-	if (strcmp(WSCONFIG(ws)->cert_user_oid, "SAN(rfc822name)") == 0) {
+	if (strcmp(WSRCONFIG(ws)->cert_user_oid, "SAN(rfc822name)") == 0) {
 		for (i = 0;; i++) {
 			size = sizeof(cert_username);
 			ret = gnutls_x509_crt_get_subject_alt_name(
@@ -545,11 +547,11 @@ static int get_cert_username(worker_st *ws, gnutls_x509_crt_t crt)
 				return 0;
 			}
 		}
-	} else if (WSCONFIG(ws)->cert_user_oid) {
+	} else if (WSRCONFIG(ws)->cert_user_oid) {
 		size = sizeof(cert_username);
-		ret = gnutls_x509_crt_get_dn_by_oid(crt,
-						    WSCONFIG(ws)->cert_user_oid,
-						    0, 0, cert_username, &size);
+		ret = gnutls_x509_crt_get_dn_by_oid(
+			crt, WSRCONFIG(ws)->cert_user_oid, 0, 0, cert_username,
+			&size);
 		if (ret < 0)
 			return ret;
 		strlcpy(ws->cert_username, cert_username,
@@ -599,16 +601,16 @@ int get_cert_names(worker_st *ws, const gnutls_datum_t *raw)
 		else if (ret == GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE)
 			oclog(ws, LOG_ERR,
 			      "the certificate does not contain %s; cannot determine username",
-			      WSCONFIG(ws)->cert_user_oid);
+			      WSRCONFIG(ws)->cert_user_oid);
 		else
 			oclog(ws, LOG_ERR,
 			      "cannot obtain username from certificate (%s): %s",
-			      WSCONFIG(ws)->cert_user_oid,
+			      WSRCONFIG(ws)->cert_user_oid,
 			      gnutls_strerror(ret));
 		goto fail;
 	}
 
-	if (WSCONFIG(ws)->cert_group_oid) {
+	if (WSRCONFIG(ws)->cert_group_oid) {
 		i = 0;
 		do {
 			ws->cert_groups = talloc_realloc(ws, ws->cert_groups,
@@ -622,7 +624,7 @@ int get_cert_names(worker_st *ws, const gnutls_datum_t *raw)
 
 			size = 0;
 			ret = gnutls_x509_crt_get_dn_by_oid(
-				crt, WSCONFIG(ws)->cert_group_oid, i, 0, NULL,
+				crt, WSRCONFIG(ws)->cert_group_oid, i, 0, NULL,
 				&size);
 			if (ret == GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE)
 				break;
@@ -632,7 +634,7 @@ int get_cert_names(worker_st *ws, const gnutls_datum_t *raw)
 					ret = GNUTLS_E_INTERNAL_ERROR;
 				oclog(ws, LOG_ERR,
 				      "cannot obtain group from certificate DN(%s): %s",
-				      WSCONFIG(ws)->cert_group_oid,
+				      WSRCONFIG(ws)->cert_group_oid,
 				      gnutls_strerror(ret));
 				goto fail;
 			}
@@ -646,7 +648,7 @@ int get_cert_names(worker_st *ws, const gnutls_datum_t *raw)
 			}
 
 			ret = gnutls_x509_crt_get_dn_by_oid(
-				crt, WSCONFIG(ws)->cert_group_oid, i, 0,
+				crt, WSRCONFIG(ws)->cert_group_oid, i, 0,
 				ws->cert_groups[i], &size);
 			if (ret < 0) {
 				oclog(ws, LOG_ERR,
@@ -693,7 +695,7 @@ static int recv_cookie_auth_reply(worker_st *ws)
 	ret = recv_socket_msg(ws, ws->cmd_fd, AUTH_COOKIE_REP, &socketfd,
 			      (void *)&msg,
 			      (unpack_func)auth_cookie_reply_msg__unpack,
-			      WSCONFIG(ws)->auth_timeout);
+			      WSRCONFIG(ws)->auth_timeout);
 	if (ret < 0) {
 		oclog(ws, LOG_ERR, "error receiving auth reply message");
 		return ret;
@@ -795,7 +797,7 @@ static int recv_cookie_auth_reply(worker_st *ws)
 			}
 
 			if (msg->config->has_no_udp)
-				WSCONFIG(ws)->no_udp = msg->config->no_udp;
+				WSRCONFIG(ws)->no_udp = msg->config->no_udp;
 
 			/* routes */
 			if (check_if_default_route(msg->config->routes,
@@ -863,11 +865,11 @@ int recv_auth_reply(worker_st *ws, int sd, char **txt, unsigned int *pcounter)
 	PROTOBUF_ALLOCATOR(pa, ws);
 
 	/* We don't use the default socket timeout here, but rather the
-	 * longer WSCONFIG(ws)->auth_timeout to allow for authentication
+	 * longer WSRCONFIG(ws)->auth_timeout to allow for authentication
 	 * methods which require the user input prior to returning a reply */
 	ret = recv_msg(ws, sd, CMD_SEC_AUTH_REPLY, (void *)&msg,
 		       (unpack_func)sec_auth_reply_msg__unpack,
-		       WSCONFIG(ws)->auth_timeout);
+		       WSRCONFIG(ws)->auth_timeout);
 	if (ret < 0) {
 		oclog(ws, LOG_ERR, "error receiving auth reply message");
 		return ret;
@@ -968,7 +970,7 @@ int get_cert_info(worker_st *ws)
 
 	ret = get_cert_names(ws, cert);
 	if (ret < 0) {
-		if (WSCONFIG(ws)->cert_user_oid == NULL) {
+		if (WSRCONFIG(ws)->cert_user_oid == NULL) {
 			oclog(ws, LOG_ERR,
 			      "cannot read username from certificate; cert-user-oid is not set");
 		} else {
@@ -1004,7 +1006,7 @@ void cookie_authenticate_or_exit(worker_st *ws)
 	ret = auth_cookie(ws, ws->cookie, sizeof(ws->cookie));
 	if (ret < 0) {
 		oclog(ws, LOG_WARNING, "failed cookie authentication attempt");
-		if (WSCONFIG(ws)->camouflage &&
+		if (WSRCONFIG(ws)->camouflage &&
 		    ws->camouflage_check_passed == 0) {
 			cstp_puts(ws,
 				  "HTTP/1.1 405 Method Not Allowed\r\n\r\n");
@@ -1032,7 +1034,7 @@ int auth_cookie(worker_st *ws, void *cookie, size_t cookie_size)
 	AuthCookieRequestMsg msg = AUTH_COOKIE_REQUEST_MSG__INIT;
 
 	if ((ws->selected_auth->type & AUTH_TYPE_CERTIFICATE) &&
-	    WSCONFIG(ws)->cisco_client_compat == 0) {
+	    WSRCONFIG(ws)->cisco_client_compat == 0) {
 		if (ws->cert_auth_ok == 0) {
 			oclog(ws, LOG_INFO,
 			      "no certificate provided for cookie authentication");
@@ -1093,11 +1095,11 @@ int post_common_handler(worker_st *ws, unsigned int http_ver, const char *imsg)
 		success_msg_head = oc_success_msg_head;
 		success_msg_foot = NULL;
 #ifdef ANYCONNECT_CLIENT_COMPAT
-		if (WSCONFIG(ws)->xml_config_file) {
+		if (WSRCONFIG(ws)->xml_config_file) {
 			success_msg_foot =
 				talloc_asprintf(ws, OC_SUCCESS_MSG_FOOT_PROFILE,
-						WSCONFIG(ws)->xml_config_file,
-						WSCONFIG(ws)->xml_config_hash);
+						WSRCONFIG(ws)->xml_config_file,
+						WSRCONFIG(ws)->xml_config_hash);
 		}
 #endif
 
@@ -1140,9 +1142,9 @@ int post_common_handler(worker_st *ws, unsigned int http_ver, const char *imsg)
 	if (ret < 0)
 		goto fail;
 
-	if (WSCONFIG(ws)->banner) {
+	if (WSRCONFIG(ws)->banner) {
 		if (snprintf(msg, sizeof(msg), "<banner>%s</banner>",
-			     WSCONFIG(ws)->banner) <= 0)
+			     WSRCONFIG(ws)->banner) <= 0)
 			goto fail;
 		/* snprintf() returns not a very useful value, so we need to recalculate */
 		size = strlen(msg);
@@ -1196,17 +1198,18 @@ int post_common_handler(worker_st *ws, unsigned int http_ver, const char *imsg)
 		goto fail;
 
 #ifdef ANYCONNECT_CLIENT_COMPAT
-	if (WSCONFIG(ws)->xml_config_file) {
+	if (WSRCONFIG(ws)->xml_config_file) {
 		ret = cstp_printf(
 			ws,
 			"Set-Cookie: webvpnc=bu:/&p:t&iu:1/&sh:%s&lu:/+CSCOT+/translation-table?textdomain%%3DAnyConnect%%26type%%3Dmanifest&fu:profiles%%2F%s&fh:%s; path=/; Secure; HttpOnly\r\n",
-			WSPCONFIG(ws)->cert_hash, WSCONFIG(ws)->xml_config_file,
-			WSCONFIG(ws)->xml_config_hash);
+			WSSCONFIG(ws)->cert_hash,
+			WSRCONFIG(ws)->xml_config_file,
+			WSRCONFIG(ws)->xml_config_hash);
 	} else {
 		ret = cstp_printf(
 			ws,
 			"Set-Cookie: webvpnc=bu:/&p:t&iu:1/&sh:%s; path=/; Secure; HttpOnly\r\n",
-			WSPCONFIG(ws)->cert_hash);
+			WSSCONFIG(ws)->cert_hash);
 	}
 #endif
 
@@ -1434,7 +1437,7 @@ static int basic_auth_handler(worker_st *ws, unsigned int http_ver,
 	if (ret < 0)
 		return -1;
 
-	if (WSPCONFIG(ws)->auth_methods > 1) {
+	if (WSSCONFIG(ws)->auth_methods > 1) {
 		ret = cstp_puts(ws, "X-HTTP-Auth-Support: fallback\r\n");
 		if (ret < 0)
 			return -1;
@@ -1552,7 +1555,7 @@ int post_auth_handler(worker_st *ws, unsigned int http_ver)
 		SecAuthInitMsg ireq = SEC_AUTH_INIT_MSG__INIT;
 
 		/* If the URL is not a known one and more than a character, we parse it as a group indicator */
-		if (WSCONFIG(ws)->select_group_by_url != 0 &&
+		if (WSRCONFIG(ws)->select_group_by_url != 0 &&
 		    http_post_known_service_check(ws, req->url) == NULL &&
 		    strlen(req->url) > 1) {
 			groupname = talloc_strdup(ws->req.body, req->url + 1);
@@ -1581,21 +1584,22 @@ int post_auth_handler(worker_st *ws, unsigned int http_ver)
 		if (ret < 0) {
 			oclog(ws, LOG_HTTP_DEBUG, "failed reading groupname");
 		} else {
-			if (WSCONFIG(ws)->default_select_group != NULL &&
+			if (WSRCONFIG(ws)->default_select_group != NULL &&
 			    strcmp(groupname,
-				   WSCONFIG(ws)->default_select_group) == 0) {
+				   WSRCONFIG(ws)->default_select_group) == 0) {
 				def_group = 1;
 			} else {
 				/* Some anyconnect clients send the group friendly name instead of
 				 * the actual value; see #267 */
 				ws->groupname[0] = 0;
-				if (WSCONFIG(ws)->friendly_group_list != NULL) {
+				if (WSRCONFIG(ws)->friendly_group_list !=
+				    NULL) {
 					unsigned int found = 0, i;
 
 					for (i = 0;
-					     i < WSCONFIG(ws)->group_list_size;
+					     i < WSRCONFIG(ws)->n_group_list;
 					     i++) {
-						if (strcmp(WSCONFIG(ws)
+						if (strcmp(WSRCONFIG(ws)
 								   ->group_list
 									   [i],
 							   groupname) == 0) {
@@ -1607,18 +1611,17 @@ int post_auth_handler(worker_st *ws, unsigned int http_ver)
 					if (!found)
 						for (i = 0;
 						     i <
-						     WSCONFIG(ws)
-							     ->group_list_size;
+						     WSRCONFIG(ws)->n_group_list;
 						     i++) {
-							if (WSCONFIG(ws)->friendly_group_list
+							if (WSRCONFIG(ws)->friendly_group_list
 									    [i] !=
 								    NULL &&
-							    strcmp(WSCONFIG(ws)->friendly_group_list
+							    strcmp(WSRCONFIG(ws)->friendly_group_list
 									   [i],
 								   groupname) ==
 								    0) {
 								strlcpy(ws->groupname,
-									WSCONFIG(
+									WSRCONFIG(
 										ws)
 										->group_list
 											[i],

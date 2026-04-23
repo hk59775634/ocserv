@@ -115,7 +115,7 @@ static int pin_callback(void *user, int attempt, const char *token_url,
 	return 0;
 }
 
-static int load_pins(struct perm_cfg_st *config, struct pin_st *s)
+static int load_pins(struct static_cfg_st *config, struct pin_st *s)
 {
 	int fd, ret;
 
@@ -640,8 +640,8 @@ static void send_stats_to_main(sec_mod_st *sec)
 	time_t now = time(NULL);
 	SecmStatsMsg msg = SECM_STATS_MSG__INIT;
 
-	if (GETPCONFIG(sec)->stats_reset_time != 0 &&
-	    now - sec->last_stats_reset > GETPCONFIG(sec)->stats_reset_time) {
+	if (GETSCONFIG(sec)->stats_reset_time != 0 &&
+	    now - sec->last_stats_reset > GETSCONFIG(sec)->stats_reset_time) {
 		sec->auth_failures = 0;
 		sec->avg_auth_time = 0;
 		sec->max_auth_time = 0;
@@ -823,18 +823,18 @@ leave:
 	return ret;
 }
 
-#define CHECK_LOOP_ERR(x)                                          \
-	{                                                          \
-		if (force != 0) {                                  \
-			GNUTLS_FATAL_ERR(x);                       \
-		} else {                                           \
-			if (ret < 0) {                             \
-				seclog(sec, LOG_ERR,               \
-				       "could not reload key %s",  \
-				       vhost->perm_config.key[i]); \
-				continue;                          \
-			}                                          \
-		}                                                  \
+#define CHECK_LOOP_ERR(x)                                            \
+	{                                                            \
+		if (force != 0) {                                    \
+			GNUTLS_FATAL_ERR(x);                         \
+		} else {                                             \
+			if (ret < 0) {                               \
+				seclog(sec, LOG_ERR,                 \
+				       "could not reload key %s",    \
+				       vhost->static_config.key[i]); \
+				continue;                            \
+			}                                            \
+		}                                                    \
 	}
 
 static void read_private_key(sec_mod_st *sec, vhost_cfg_st *vhost,
@@ -851,20 +851,20 @@ static void read_private_key(sec_mod_st *sec, vhost_cfg_st *vhost,
 		CHECK_LOOP_ERR(ret);
 
 		/* load the private key */
-		if (gnutls_url_is_supported(vhost->perm_config.key[i]) != 0) {
+		if (gnutls_url_is_supported(vhost->static_config.key[i]) != 0) {
 			gnutls_privkey_set_pin_function(p, pin_callback,
 							&vhost->pins);
 			ret = gnutls_privkey_import_url(
-				p, vhost->perm_config.key[i], 0);
+				p, vhost->static_config.key[i], 0);
 			CHECK_LOOP_ERR(ret);
 		} else {
 			gnutls_datum_t data;
 
-			ret = gnutls_load_file(vhost->perm_config.key[i],
+			ret = gnutls_load_file(vhost->static_config.key[i],
 					       &data);
 			if (ret < 0) {
 				seclog(sec, LOG_ERR, "error loading file '%s'",
-				       vhost->perm_config.key[i]);
+				       vhost->static_config.key[i]);
 				CHECK_LOOP_ERR(ret);
 			}
 
@@ -904,10 +904,10 @@ static int load_keys(sec_mod_st *sec, unsigned int force)
 		if (force == 0) {
 			reload_file = 0;
 
-			for (i = 0; i < vhost->perm_config.key_size; i++) {
-				if (need_file_reload(vhost->perm_config.key[i],
-						     vhost->cert_last_access) !=
-				    0) {
+			for (i = 0; i < vhost->static_config.key_size; i++) {
+				if (need_file_reload(
+					    vhost->static_config.key[i],
+					    vhost->cert_last_access) != 0) {
 					reload_file = 1;
 					break;
 				}
@@ -919,7 +919,7 @@ static int load_keys(sec_mod_st *sec, unsigned int force)
 
 		vhost->cert_last_access = time(NULL);
 
-		ret = load_pins(GETPCONFIG(sec), &vhost->pins);
+		ret = load_pins(GETSCONFIG(sec), &vhost->pins);
 		if (ret < 0) {
 			seclog(sec, LOG_ERR, "error loading PIN files");
 			exit(EXIT_FAILURE);
@@ -928,10 +928,10 @@ static int load_keys(sec_mod_st *sec, unsigned int force)
 		/* Reminder: the number of private keys or their filenames cannot be changed on reload
 		 */
 		if (vhost->key == NULL) {
-			vhost->key_size = vhost->perm_config.key_size;
+			vhost->key_size = vhost->static_config.key_size;
 			vhost->key = talloc_zero_size(
 				sec, sizeof(*vhost->key) *
-					     vhost->perm_config.key_size);
+					     vhost->static_config.key_size);
 			if (vhost->key == NULL) {
 				seclog(sec, LOG_ERR,
 				       "error in memory allocation");
@@ -1074,7 +1074,7 @@ void sec_mod_server(void *main_pool, void *config_pool,
 		exit(EXIT_FAILURE);
 	}
 
-	ret = chown(SOCKET_FILE, GETPCONFIG(sec)->uid, GETPCONFIG(sec)->gid);
+	ret = chown(SOCKET_FILE, GETSCONFIG(sec)->uid, GETSCONFIG(sec)->gid);
 	if (ret == -1) {
 		e = errno;
 		seclog(sec, LOG_INFO, "could not chown socket '%s': %s",
@@ -1184,9 +1184,9 @@ void sec_mod_server(void *main_pool, void *config_pool,
 			/* do not allow unauthorized processes to issue commands
 			 */
 			ret = check_upeer_id("sec-mod",
-					     GETPCONFIG(sec)->log_level, cfd,
-					     GETPCONFIG(sec)->uid,
-					     GETPCONFIG(sec)->gid, &uid, &pid);
+					     GETSCONFIG(sec)->log_level, cfd,
+					     GETSCONFIG(sec)->uid,
+					     GETSCONFIG(sec)->gid, &uid, &pid);
 			if (ret < 0) {
 				seclog(sec, LOG_INFO,
 				       "rejected unauthorized connection");

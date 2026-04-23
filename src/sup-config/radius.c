@@ -38,7 +38,7 @@
 #include <auth/radius.h>
 #include "log.h"
 
-static int get_sup_config(struct cfg_st *cfg, client_entry_st *entry,
+static int get_sup_config(ReloadableConfig *cfg, client_entry_st *entry,
 			  SecmSessionReplyMsg *msg, void *pool)
 {
 	struct radius_ctx_st *pctx = entry->auth_ctx;

@@ -1,5 +1,7 @@
 * Version 1.5.0 (unreleased)
 - Fixed sudden disconnects after authentication for AnyConnect clients
+- Vhosts now inherit configuration options from the default vhost if
+  they are not overridden (#705)
 
 
 * Version 1.4.2 (released 2026-04-16)

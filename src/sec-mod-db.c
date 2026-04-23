@@ -139,8 +139,7 @@ client_entry_st *new_client_entry(sec_mod_st *sec, struct vhost_cfg_st *vhost,
 	calc_safe_id(e->sid, SID_SIZE, (char *)e->acct_info.safe_id,
 		     sizeof(e->acct_info.safe_id));
 	now = time(NULL);
-	e->exptime = now + vhost->perm_config.config->cookie_timeout +
-		     AUTH_SLACK_TIME;
+	e->exptime = now + vhost->config->cookie_timeout + AUTH_SLACK_TIME;
 	e->created = now;
 
 	if (htable_add(db, rehash(e, NULL), e) == 0) {
@@ -215,7 +214,7 @@ void expire_client_entry(sec_mod_st *sec, client_entry_st *e)
 	if (e->in_use > 0)
 		e->in_use--;
 	if (e->in_use == 0) {
-		if (e->vhost->perm_config.config->persistent_cookies == 0 &&
+		if (e->vhost->config->persistent_cookies == 0 &&
 		    (e->discon_reason == REASON_SERVER_DISCONNECT ||
 		     e->discon_reason == REASON_SESSION_TIMEOUT ||
 		     (e->session_is_open &&
@@ -232,14 +231,12 @@ void expire_client_entry(sec_mod_st *sec, client_entry_st *e)
 			 * explicitly disconnect with the intention to reconnect
 			 * seconds later. */
 			if (e->discon_reason == REASON_USER_DISCONNECT) {
-				if (!e->vhost->perm_config.config
-					     ->persistent_cookies ||
+				if (!e->vhost->config->persistent_cookies ||
 				    (now + AUTH_SLACK_TIME >= e->exptime))
 					e->exptime = now + AUTH_SLACK_TIME;
 			} else {
 				e->exptime = now +
-					     e->vhost->perm_config.config
-						     ->cookie_timeout +
+					     e->vhost->config->cookie_timeout +
 					     AUTH_SLACK_TIME;
 			}
 			seclog(sec, LOG_INFO,

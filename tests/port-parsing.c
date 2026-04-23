@@ -36,10 +36,6 @@
 		y = 0;          \
 	}
 
-void fw_port_st__init(FwPortSt *message)
-{
-}
-
 void check_vals(FwPortSt **fw_ports, size_t n_fw_ports)
 {
 	if (n_fw_ports != 7) {

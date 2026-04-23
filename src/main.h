@@ -404,7 +404,7 @@ inline static int send_socket_msg_to_worker(main_server_st *s,
 
 int secmod_reload(sec_mod_instance_st *sec_mod_instance);
 
-const char *secmod_socket_file_name(struct perm_cfg_st *perm_config);
+const char *secmod_socket_file_name(struct static_cfg_st *static_config);
 void restore_secmod_socket_file_name(const char *save_path);
 void clear_vhosts(struct list_head *head);
 

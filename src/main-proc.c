@@ -85,7 +85,7 @@ struct proc_st *new_proc(main_server_st *s, pid_t pid, int cmd_fd,
 	/* initially we put into the "default" vhost cgroup. We
 	 * will change cgroup once it is known which vhost this
 	 * proc belongs to */
-	put_into_cgroup(s, GETCONFIG(s)->cgroup, pid);
+	put_into_cgroup(s, GETRCONFIG(s)->cgroup, pid);
 	s->stats.active_clients++;
 
 	return ctmp;

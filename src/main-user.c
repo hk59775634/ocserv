@@ -292,11 +292,11 @@ static int call_script(main_server_st *s, struct proc_st *proc,
 	const char *script, *next_script = NULL;
 
 	if (type == SCRIPT_CONNECT)
-		script = GETCONFIG(s)->connect_script;
+		script = GETRCONFIG(s)->connect_script;
 	else if (type == SCRIPT_HOST_UPDATE)
-		script = GETCONFIG(s)->host_update_script;
+		script = GETRCONFIG(s)->host_update_script;
 	else
-		script = GETCONFIG(s)->disconnect_script;
+		script = GETRCONFIG(s)->disconnect_script;
 
 	if (type != SCRIPT_HOST_UPDATE) {
 		if (proc->config->restrict_user_to_routes ||
@@ -488,7 +488,7 @@ static void add_utmp_entry(main_server_st *s, struct proc_st *proc)
 	struct utmpx entry;
 	struct timespec tv;
 
-	if (GETCONFIG(s)->use_utmp == 0)
+	if (GETRCONFIG(s)->use_utmp == 0)
 		return;
 
 	memset(&entry, 0, sizeof(entry));
@@ -532,7 +532,7 @@ static void remove_utmp_entry(main_server_st *s, struct proc_st *proc)
 	struct timespec tv;
 #endif
 
-	if (GETCONFIG(s)->use_utmp == 0)
+	if (GETRCONFIG(s)->use_utmp == 0)
 		return;
 
 	memset(&entry, 0, sizeof(entry));

@@ -167,7 +167,7 @@ int handle_commands_from_main(struct worker_st *ws)
 		dtls->dtls_tptr.msg = tmsg;
 		dtls->dtls_tptr.fd = fd;
 
-		if (WSCONFIG(ws)->try_mtu == 0)
+		if (WSRCONFIG(ws)->try_mtu == 0)
 			set_mtu_disc(fd, ws->proto, 0);
 
 		oclog(ws, LOG_DEBUG,
@@ -198,8 +198,8 @@ int complete_vpn_info(worker_st *ws, struct vpn_st *vinfo)
 		return -1;
 	}
 
-	if (WSCONFIG(ws)->default_mtu != 0) {
-		vinfo->mtu = WSCONFIG(ws)->default_mtu;
+	if (WSRCONFIG(ws)->default_mtu != 0) {
+		vinfo->mtu = WSRCONFIG(ws)->default_mtu;
 	} else {
 		fd = socket(AF_INET, SOCK_STREAM, 0);
 		if (fd == -1)

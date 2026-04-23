@@ -311,7 +311,7 @@ static void header_value_check(struct worker_st *ws, struct http_req_st *req)
 	if (req->value.length == 0)
 		return;
 
-	if (WSPCONFIG(ws)->log_level < OCLOG_SENSITIVE &&
+	if (WSSCONFIG(ws)->log_level < OCLOG_SENSITIVE &&
 	    header_is_sensitive(&req->header))
 		oclog(ws, LOG_HTTP_DEBUG, "HTTP processing: %.*s: (censored)",
 		      (int)req->header.length, req->header.data);
@@ -331,7 +331,7 @@ static void header_value_check(struct worker_st *ws, struct http_req_st *req)
 
 	switch (req->next_header) {
 	case HEADER_MASTER_SECRET:
-		if (req->use_psk || !WSCONFIG(ws)->dtls_legacy) /* ignored */
+		if (req->use_psk || !WSRCONFIG(ws)->dtls_legacy) /* ignored */
 			break;
 
 		if (value_length < TLS_MASTER_SIZE * 2) {
@@ -486,7 +486,7 @@ static void header_value_check(struct worker_st *ws, struct http_req_st *req)
 		if (p != NULL && (p[sizeof(DTLS_PROTO_INDICATOR) - 1] == 0 ||
 				  p[sizeof(DTLS_PROTO_INDICATOR) - 1] == ':')) {
 			/* OpenConnect DTLS setup was detected. */
-			if (WSCONFIG(ws)->dtls_psk) {
+			if (WSRCONFIG(ws)->dtls_psk) {
 				req->use_psk = 1;
 				req->master_secret_set =
 					1; /* we don't need it */
@@ -495,7 +495,7 @@ static void header_value_check(struct worker_st *ws, struct http_req_st *req)
 			}
 		}
 
-		if (req->use_psk || !WSCONFIG(ws)->dtls_legacy)
+		if (req->use_psk || !WSRCONFIG(ws)->dtls_legacy)
 			break;
 
 		if (req->selected_ciphersuite) /* if set via HEADER_DTLS12_CIPHERSUITE */
@@ -543,7 +543,7 @@ ciphersuite_finish:
 
 		break;
 	case HEADER_DTLS12_CIPHERSUITE:
-		if (req->use_psk || !WSCONFIG(ws)->dtls_legacy) {
+		if (req->use_psk || !WSRCONFIG(ws)->dtls_legacy) {
 			break;
 		}
 
@@ -565,7 +565,7 @@ ciphersuite_finish:
 		if (p != NULL && (p[sizeof(DTLS_PROTO_INDICATOR) - 1] == 0 ||
 				  p[sizeof(DTLS_PROTO_INDICATOR) - 1] == ':')) {
 			/* OpenConnect DTLS setup was detected. */
-			if (WSCONFIG(ws)->dtls_psk) {
+			if (WSRCONFIG(ws)->dtls_psk) {
 				req->use_psk = 1;
 				req->master_secret_set =
 					1; /* we don't need it */
@@ -625,7 +625,7 @@ ciphersuite12_finish:
 #ifdef ENABLE_COMPRESSION
 	case HEADER_DTLS_ENCODING:
 	case HEADER_CSTP_ENCODING:
-		if (WSCONFIG(ws)->enable_compression == 0)
+		if (WSRCONFIG(ws)->enable_compression == 0)
 			break;
 
 		if (req->next_header == HEADER_DTLS_ENCODING)
@@ -777,9 +777,9 @@ url_handler_fn http_post_known_service_check(struct worker_st *ws,
 			return p->post_handler;
 	}
 
-	for (i = 0; i < WSCONFIG(ws)->kkdcp_size; i++) {
-		if (WSCONFIG(ws)->kkdcp[i].url &&
-		    strcmp(WSCONFIG(ws)->kkdcp[i].url, url) == 0)
+	for (i = 0; i < WSRCONFIG(ws)->n_kkdcp; i++) {
+		if (WSRCONFIG(ws)->kkdcp[i]->url &&
+		    strcmp(WSRCONFIG(ws)->kkdcp[i]->url, url) == 0)
 			return post_kkdcp_handler;
 	}
 
@@ -965,9 +965,9 @@ int add_owasp_headers(worker_st *ws)
 {
 	unsigned int i;
 
-	for (i = 0; i < GETCONFIG(ws)->included_http_headers_size; i++) {
+	for (i = 0; i < GETRCONFIG(ws)->n_included_http_headers; i++) {
 		if (cstp_printf(ws, "%s",
-				GETCONFIG(ws)->included_http_headers[i]) < 0 ||
+				GETRCONFIG(ws)->included_http_headers[i]) < 0 ||
 		    cstp_puts(ws, "\r\n") < 0) {
 			return -1;
 		}

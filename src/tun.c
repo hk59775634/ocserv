@@ -461,7 +461,7 @@ static int bsd_ifrename(main_server_st *s, struct proc_st *proc)
 	strlcpy(ifr.ifr_name, proc->tun_lease.name, IFNAMSIZ);
 
 	ret = snprintf(tun_name, sizeof(tun_name), "%s%u",
-		       GETCONFIG(s)->network.name, next_tun_nr + 1024);
+		       GETRCONFIG(s)->network->name, next_tun_nr + 1024);
 	if (ret >= sizeof(tun_name))
 		next_tun_nr = 0;
 
@@ -469,7 +469,7 @@ static int bsd_ifrename(main_server_st *s, struct proc_st *proc)
 
 	for (i = ctr; i < ctr + 1024; i++) {
 		ret = snprintf(tun_name, sizeof(tun_name), "%s%u",
-			       GETCONFIG(s)->network.name, i);
+			       GETRCONFIG(s)->network->name, i);
 		if (ret != strlen(tun_name)) {
 			mslog(s, NULL, LOG_ERR,
 			      "Truncation error in tun name: %s; adjust 'device' option\n",
@@ -533,9 +533,9 @@ static int os_open_tun(main_server_st *s, struct proc_st *proc)
 		mslog(s, NULL, LOG_DEBUG,
 		      "cannot open /dev/tun; falling back to iteration: %s",
 		      strerror(e));
-		for (unit_nr = 0;
-		     GETCONFIG(s)->max_clients > 0 ? GETCONFIG(s)->max_clients :
-						     8192;
+		for (unit_nr = 0; GETRCONFIG(s)->max_clients > 0 ?
+					  GETRCONFIG(s)->max_clients :
+					  8192;
 		     unit_nr++) {
 			snprintf(proc->tun_lease.name,
 				 sizeof(proc->tun_lease.name), "/dev/tun%d",
@@ -658,7 +658,7 @@ static int os_open_tun(main_server_st *s, struct proc_st *proc)
 	unsigned int t;
 
 	ret = snprintf(proc->tun_lease.name, sizeof(proc->tun_lease.name),
-		       "%s%%d", GETCONFIG(s)->network.name);
+		       "%s%%d", GETRCONFIG(s)->network->name);
 	if (ret != strlen(proc->tun_lease.name)) {
 		mslog(s, NULL, LOG_ERR,
 		      "Truncation error in tun name: %s; adjust 'device' option\n",
@@ -699,8 +699,8 @@ static int os_open_tun(main_server_st *s, struct proc_st *proc)
 		goto fail;
 	}
 
-	if (GETPCONFIG(s)->uid != -1) {
-		t = GETPCONFIG(s)->uid;
+	if (GETSCONFIG(s)->uid != -1) {
+		t = GETSCONFIG(s)->uid;
 		ret = ioctl(tunfd, TUNSETOWNER, t);
 		if (ret < 0) {
 			e = errno;
@@ -710,8 +710,8 @@ static int os_open_tun(main_server_st *s, struct proc_st *proc)
 		}
 	}
 #ifdef TUNSETGROUP
-	if (GETPCONFIG(s)->gid != -1) {
-		t = GETPCONFIG(s)->gid;
+	if (GETSCONFIG(s)->gid != -1) {
+		t = GETSCONFIG(s)->gid;
 		ret = ioctl(tunfd, TUNSETGROUP, t);
 		if (ret < 0) {
 			e = errno;

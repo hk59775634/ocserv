@@ -91,8 +91,8 @@ Each configuration option has a **scope** that determines where it may appear.
     section is a configuration error that prevents the server from starting
     (e.g. `max-clients`, `device`, `route-add-cmd`).
 
-  * *vhost* — the option may appear at the top level applying to the default
-    virtual host, or inside a specific `[vhost:]` (e.g. `tls-priorities`,
+  * *vhost* — the option may appear at the top level applying as a default
+    for all virtual hosts, or inside a specific `[vhost:]` (e.g. `tls-priorities`,
     `banner`, `cookie-timeout`).
 
   * *vhost user* — the option may appear at the top level, in a `[vhost:]` section,

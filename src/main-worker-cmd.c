@@ -325,8 +325,8 @@ int handle_worker_commands(main_server_st *s, struct proc_st *proc)
 		TunMtuMsg *tmsg;
 		unsigned int minimum_mtu = RFC_791_MTU;
 		unsigned int maximum_mtu =
-			proc->vhost->perm_config.config->default_mtu != 0 ?
-				proc->vhost->perm_config.config->default_mtu :
+			proc->vhost->config->default_mtu != 0 ?
+				proc->vhost->config->default_mtu :
 				MAX_DTLS_MTU;
 
 		if (proc->status != PS_AUTH_COMPLETED) {
@@ -384,7 +384,7 @@ int handle_worker_commands(main_server_st *s, struct proc_st *proc)
 			user_hostname_update(s, proc);
 		}
 
-		if (GETCONFIG(s)->listen_proxy_proto) {
+		if (GETRCONFIG(s)->listen_proxy_proto) {
 			if (tmsg->has_remote_addr &&
 			    tmsg->remote_addr.len <=
 				    sizeof(struct sockaddr_storage)) {

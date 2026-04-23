@@ -34,6 +34,7 @@
 #include <auth/common.h>
 
 #include <ipc.pb-c.h>
+#include <cfg.pb-c.h>
 
 #ifdef __GNUC__
 #define _OCSERV_GCC_VERSION \
@@ -181,7 +182,6 @@ struct vpn_st {
 };
 
 #define MAX_AUTH_METHODS 4
-#define MAX_KRB_REALMS 16
 
 typedef struct auth_struct_st {
 	char *name;
@@ -201,200 +201,16 @@ typedef struct acct_struct_st {
 	const struct acct_mod_st *amod;
 } acct_struct_st;
 
-typedef struct kkdcp_realm_st {
-	char *realm;
-	struct sockaddr_storage addr;
-	socklen_t addr_len;
-	int ai_family;
-	int ai_socktype;
-	int ai_protocol;
-} kkdcp_realm_st;
-
-typedef struct kkdcp_st {
-	char *url;
-	/* the supported realms by this URL */
-	kkdcp_realm_st realms[MAX_KRB_REALMS];
-	unsigned int realms_size;
-} kkdcp_st;
-
 /*
- * Scope tags for config options:
- *   [scope: global]         -- reloadable; error if set in a [vhost:X] section
- *   [scope: vhost]          -- reloadable; can differ per virtual host
- *   [scope: vhost user]    -- reloadable; settable per-vhost and overridable per-user/group
- * Options in perm_cfg_st are permanent (require restart); see tags there.
- */
-struct cfg_st {
-	unsigned int is_dyndns; /* [scope: vhost] */
-	unsigned int listen_proxy_proto; /* [scope: global] */
-	unsigned int stats_report_time; /* [scope: vhost user] */
-
-	kkdcp_st *kkdcp; /* [scope: vhost] */
-	unsigned int kkdcp_size; /* [scope: vhost] */
-
-	char *cert_user_oid; /* [scope: vhost] The OID that will be used to extract the username */
-	char *cert_group_oid; /* [scope: vhost] The OID that will be used to extract the groupname */
-
-	gnutls_certificate_request_t cert_req; /* [scope: vhost] */
-	char *priorities; /* [scope: vhost] */
-#ifdef ENABLE_COMPRESSION
-	unsigned int enable_compression; /* [scope: vhost] */
-	unsigned int
-		no_compress_limit; /* [scope: vhost] under this size (in bytes) of data there will be no compression */
-#endif
-	char *banner; /* [scope: vhost] */
-	char *pre_login_banner; /* [scope: vhost] */
-	char *ocsp_response; /* [scope: vhost] file with the OCSP response */
-	char *default_domain; /* [scope: vhost] domain to be advertised */
-
-	char **group_list; /* [scope: vhost] select_group */
-	unsigned int group_list_size; /* [scope: vhost] */
-
-	char **friendly_group_list; /* [scope: vhost] the same size as group_list_size */
-
-	unsigned int select_group_by_url; /* [scope: vhost] */
-	unsigned int auto_select_group; /* [scope: vhost] */
-	char *default_select_group; /* [scope: vhost] */
-
-	char **custom_header; /* [scope: vhost] */
-	size_t custom_header_size; /* [scope: vhost] */
-
-	char **split_dns; /* [scope: vhost user] */
-	size_t split_dns_size; /* [scope: vhost user] */
-
-	/* http headers to include */
-	char **included_http_headers; /* [scope: vhost] */
-	size_t included_http_headers_size; /* [scope: vhost] */
-
-	unsigned int
-		append_routes; /* [scope: vhost] whether to append global routes to per-user config */
-	unsigned int
-		restrict_user_to_routes; /* [scope: vhost user] whether the firewall script will be run for the user */
-	unsigned int
-		deny_roaming; /* [scope: vhost user] whether a cookie is restricted to a single IP */
-	time_t cookie_timeout; /* [scope: vhost] in seconds */
-	time_t session_timeout; /* [scope: vhost user] in seconds */
-	unsigned int
-		persistent_cookies; /* [scope: vhost] whether cookies stay valid after disconnect */
-
-	time_t rekey_time; /* [scope: vhost] in seconds */
-	unsigned int rekey_method; /* [scope: vhost] REKEY_METHOD_ */
-
-	time_t ban_time; /* [scope: global] duration IP remains banned after hitting max_ban_score -> in seconds */
-	unsigned int
-		max_ban_score; /* [scope: global] the score allowed before a user is banned (see vpn.h) */
-	int ban_reset_time; /* [scope: global] */
-
-	unsigned int ban_points_wrong_password; /* [scope: global] */
-	unsigned int ban_points_connect; /* [scope: global] */
-	unsigned int ban_points_kkdcp; /* [scope: global] */
-
-	/* when using the new PSK DTLS negotiation make sure that
-	 * the negotiated DTLS cipher/mac matches the TLS cipher/mac. */
-	unsigned int match_dtls_and_tls; /* [scope: vhost] */
-	unsigned int dtls_psk; /* [scope: global] whether to enable DTLS-PSK */
-	unsigned int
-		dtls_legacy; /* [scope: vhost] whether to enable DTLS-LEGACY */
-
-	unsigned int
-		isolate; /* [scope: global] whether seccomp should be enabled or not */
-
-	unsigned int auth_timeout; /* [scope: global] timeout of HTTP auth */
-	unsigned int idle_timeout; /* [scope: vhost user] timeout when idle */
-	unsigned int
-		mobile_idle_timeout; /* [scope: vhost user] timeout when a mobile is idle */
-	unsigned int
-		switch_to_tcp_timeout; /* [scope: vhost] length of no traffic period to automatically switch to TCP */
-	unsigned int keepalive; /* [scope: vhost user] */
-	unsigned int dpd; /* [scope: vhost user] */
-	unsigned int mobile_dpd; /* [scope: vhost user] */
-	unsigned int max_clients; /* [scope: global] */
-	unsigned int max_same_clients; /* [scope: vhost user] */
-	unsigned int use_utmp; /* [scope: global] */
-	unsigned int tunnel_all_dns; /* [scope: vhost user] */
-	unsigned int
-		use_occtl; /* [scope: global] whether support for the occtl tool will be enabled */
-
-	unsigned int try_mtu; /* [scope: global] MTU discovery enabled */
-	unsigned int
-		cisco_client_compat; /* [scope: vhost] do not require client certificate,
-				       * and allow auth to complete in different
-				       * TCP sessions. */
-	unsigned int
-		cisco_svc_client_compat; /* [scope: vhost] force allowed ciphers and disable dtls-legacy */
-	unsigned int
-		rate_limit_ms; /* [scope: global] if non zero force a connection every rate_limit milliseconds if ocserv-sm is heavily loaded */
-	unsigned int
-		ping_leases; /* [scope: global] non zero if we need to ping prior to leasing */
-	unsigned int
-		server_drain_ms; /* [scope: global] how long to wait after we stop accepting new connections before closing old connections */
-
-	size_t rx_per_sec; /* [scope: vhost user] */
-	size_t tx_per_sec; /* [scope: vhost user] */
-	unsigned int net_priority; /* [scope: vhost user] */
-
-	char *crl; /* [scope: vhost] */
-
-	unsigned int output_buffer; /* [scope: vhost] */
-	unsigned int default_mtu; /* [scope: vhost user] */
-	unsigned int predictable_ips; /* [scope: vhost] boolean */
-
-	char *route_add_cmd; /* [scope: global] */
-	char *route_del_cmd; /* [scope: global] */
-
-	char *connect_script; /* [scope: global] */
-	char *host_update_script; /* [scope: global] */
-	char *disconnect_script; /* [scope: global] */
-
-	char *cgroup; /* [scope: vhost user] */
-	char *proxy_url; /* [scope: vhost] */
-
-#ifdef ANYCONNECT_CLIENT_COMPAT
-	char *xml_config_file; /* [scope: vhost user] */
-	char *xml_config_hash; /* [scope: vhost user] */
-#endif
-
-	unsigned int client_bypass_protocol; /* [scope: vhost user] */
-
-	/* additional configuration files */
-	char *per_group_dir; /* [scope: vhost] */
-	char *per_user_dir; /* [scope: vhost] */
-	char *default_group_conf; /* [scope: vhost] */
-	char *default_user_conf; /* [scope: vhost] */
-
-	bool gssapi_no_local_user_map; /* [scope: vhost] */
-
-	/* known iroutes - only sent to the users who are not registering them */
-	char **known_iroutes; /* [scope: vhost] */
-	size_t known_iroutes_size; /* [scope: vhost] */
-
-	FwPortSt **fw_ports; /* [scope: vhost user] */
-	size_t n_fw_ports; /* [scope: vhost user] */
-
-	/* the tun network */
-	struct vpn_st
-		network; /* [scope: vhost user] dns/routes/network sub-fields */
-
-	/* holds a usage count of holders of pointers in this struct */
-	int *usage_count; /* [scope: vhost] */
-
-	bool camouflage; /* [scope: vhost] */
-	char *camouflage_secret; /* [scope: vhost] */
-	char *camouflage_realm; /* [scope: vhost] */
-
-	bool no_udp; /* [scope: vhost user] */
-};
-
-/*
- * Permanent config (perm_cfg_st): requires server restart to change.
+ * Permanent config (static_cfg_st): requires server restart to change.
  * Scope tags:
  *   [scope: global (non-reloadable)] -- cannot differ per virtual host
  *   [scope: vhost (non-reloadable)]  -- can differ per virtual host
+ *
+ * Note: reloadable fields (ReloadableConfig *config, usage_count, attic) live
+ * directly in vhost_cfg_st, not here.
  */
-struct perm_cfg_st {
-	/* gets reloaded */
-	struct cfg_st *config;
-
+struct static_cfg_st {
 	/* stuff here don't change on reload */
 	auth_struct_st
 		auth[MAX_AUTH_METHODS]; /* [scope: vhost (non-reloadable)] */
@@ -444,9 +260,6 @@ struct perm_cfg_st {
 
 	/* for testing ocserv only */
 	unsigned int debug_no_secmod_stats; /* [scope: global (non-reloadable)] */
-
-	/* attic, where old config allocated values are stored */
-	struct list_head attic;
 };
 
 typedef struct attic_entry_st {

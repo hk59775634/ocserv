@@ -4,8 +4,8 @@ Validate that [scope:] annotations in doc/sample.config are consistent
 with the actual config parsing code in src/config.c and src/sup-config/file.c.
 
 Scope vocabulary:
-  global (non-reloadable)  -- perm_cfg_st; requires restart; cannot differ per vhost
-  vhost (non-reloadable)   -- perm_cfg_st; requires restart; can differ per vhost
+  global (non-reloadable)  -- static_cfg_st; requires restart; cannot differ per vhost
+  vhost (non-reloadable)   -- static_cfg_st; requires restart; can differ per vhost
   global                   -- cfg_st; reloadable; cannot be set in [vhost:] sections
   vhost                    -- cfg_st; reloadable; can differ per vhost
   vhost user               -- cfg_st; reloadable; per-vhost AND per-user/group overridable
@@ -13,7 +13,7 @@ Scope vocabulary:
 Checks performed:
   (a) Every option in sample.config has a [scope: ...] annotation.
   (b) Every option annotated [... global] has an error_on_vhost() call in
-      config.c (or is a permanent-global option in perm_cfg_st, which never
+      config.c (or is a permanent-global option in static_cfg_st, which never
       reaches error_on_vhost).
   (c) Every error_on_vhost() option in config.c is annotated [... global] in
       sample.config.
@@ -22,8 +22,10 @@ Checks performed:
       sample.config.
   (f) Every option in sample.config annotated [...user...] is also annotated
       [...vhost...] (user-overridable options must also be settable per-vhost).
-  (g) Every field in struct cfg_st and struct perm_cfg_st in src/vpn.h has a
+  (g) Every field in struct cfg_st and struct static_cfg_st in src/vpn.h has a
       [scope: ...] inline comment.
+  (h) Every [scope: vhost (non-reloadable)] field in static_cfg_st is referenced
+      in vhost_inherit_static_config() or listed in STATIC_VHOST_INHERIT_EXCEPTIONS.
 
 Exit code: 0 on success, 1 if any errors are found.
 """
@@ -125,18 +127,18 @@ def extract_sup_config_options(text):
 
 
 # ---------------------------------------------------------------------------
-# Step 4: Parse src/vpn.h — check that cfg_st and perm_cfg_st fields
+# Step 4: Parse src/vpn.h — check that cfg_st and static_cfg_st fields
 #         all have [scope: ...] annotations.
 # ---------------------------------------------------------------------------
 def check_vpn_h_annotations(text):
     """
-    Returns list of field declarations in cfg_st and perm_cfg_st
+    Returns list of field declarations in cfg_st and static_cfg_st
     that are missing a [scope: ...] inline comment.
     """
     missing = []
 
     # Find cfg_st body
-    for struct_name in ("struct cfg_st", "struct perm_cfg_st"):
+    for struct_name in ("struct cfg_st", "struct static_cfg_st"):
         m = re.search(re.escape(struct_name) + r'\s*\{', text)
         if not m:
             continue
@@ -179,6 +181,65 @@ def check_vpn_h_annotations(text):
 
 
 # ---------------------------------------------------------------------------
+# Step 5: Parse vhost_inherit_static_config() body — fields it references
+# ---------------------------------------------------------------------------
+def extract_static_inherit_fields(text):
+    """
+    Return the set of static_cfg_st field names referenced inside
+    vhost_inherit_static_config() via 'static_config.<field>'.
+    """
+    m = re.search(r'vhost_inherit_static_config\s*\([^)]+\)\s*\{', text)
+    if not m:
+        return set()
+    start = m.end()
+    depth = 1
+    pos = start
+    while pos < len(text) and depth > 0:
+        if text[pos] == '{':
+            depth += 1
+        elif text[pos] == '}':
+            depth -= 1
+        pos += 1
+    body = text[start:pos - 1]
+    # Match both direct access (static_config.field) and VHOST_INHERIT* macros.
+    direct = set(re.findall(r'static_config\.(\w+)', body))
+    macros = set(re.findall(r'VHOST_INHERIT\w*\s*\(\s*(\w+)\s*\)', body))
+    return direct | macros
+
+
+# ---------------------------------------------------------------------------
+# Step 6: Parse static_cfg_st in vpn.h — vhost (non-reloadable) field names
+# ---------------------------------------------------------------------------
+def extract_static_vhost_fields(text):
+    """
+    Return the set of field names in static_cfg_st annotated
+    [scope: vhost (non-reloadable)].
+    """
+    m = re.search(r'struct static_cfg_st\s*\{', text)
+    if not m:
+        return set()
+    start = m.end()
+    depth = 1
+    pos = start
+    while pos < len(text) and depth > 0:
+        if text[pos] == '{':
+            depth += 1
+        elif text[pos] == '}':
+            depth -= 1
+        pos += 1
+    body = text[start:pos - 1]
+
+    fields = set()
+    for line in body.splitlines():
+        if '[scope: vhost (non-reloadable)]' not in line:
+            continue
+        name_m = re.search(r'\b(\w+)\s*(?:\[[^\]]*\])?\s*;', line.strip())
+        if name_m:
+            fields.add(name_m.group(1))
+    return fields
+
+
+# ---------------------------------------------------------------------------
 # Main validation
 # ---------------------------------------------------------------------------
 def main():
@@ -194,7 +255,7 @@ def main():
     global_in_code = extract_error_on_vhost_options(config_c_text)
     user_in_code = extract_sup_config_options(sup_config_text)
 
-    # Non-reloadable options live in perm_cfg_st and never go through
+    # Non-reloadable options live in static_cfg_st and never go through
     # error_on_vhost(); they are enforced structurally.  Collect from sample.config.
     perm_global_opts = {
         opt for opt, scope in sample_scopes.items()
@@ -209,7 +270,7 @@ def main():
             )
 
     # (b) [global] options (reloadable only) must have error_on_vhost in config.c;
-    #     [global (non-reloadable)] options live in perm_cfg_st and are exempt.
+    #     [global (non-reloadable)] options live in static_cfg_st and are exempt.
     for opt, scope in sorted(sample_scopes.items()):
         if scope and "global" in scope and "non-reloadable" not in scope:
             if opt not in global_in_code:
@@ -218,8 +279,18 @@ def main():
                     f"has no error_on_vhost() call in config.c"
                 )
 
+    # Deprecated aliases that map to a canonical global option and call
+    # error_on_vhost() but intentionally have no sample.config entry.
+    DEPRECATED_GLOBAL_ALIASES = {
+        "use-seccomp",       # replaced by isolate-workers
+        "min-reauth-time",   # replaced by ban-time
+        "use-dbus",          # replaced by use-occtl
+    }
+
     # (c) Every error_on_vhost option must be annotated [... global] in sample.config
     for opt in sorted(global_in_code):
+        if opt in DEPRECATED_GLOBAL_ALIASES:
+            continue
         scope = sample_scopes.get(opt)
         if scope is None:
             errors.append(
@@ -279,6 +350,30 @@ def main():
             "src/vpn.h: the following fields are missing [scope:] annotations:"
         )
         errors.extend(missing_annot)
+
+    # (h) Every [scope: vhost (non-reloadable)] field in static_cfg_st must be
+    #     referenced in vhost_inherit_static_config() or listed as an exception.
+    #
+    # Exceptions — fields that legitimately cannot use "inherit if not set":
+    #   sup_config_type: cfg_alloc_vhost pre-sets it to SUP_CONFIG_FILE (non-zero),
+    #     so there is no reliable zero-sentinel to detect "not explicitly set".
+    STATIC_VHOST_INHERIT_EXCEPTIONS = {
+        "sup_config_type",
+    }
+
+    inherit_fields = extract_static_inherit_fields(config_c_text)
+    vhost_nonreload_fields = extract_static_vhost_fields(vpn_h_text)
+
+    for field in sorted(vhost_nonreload_fields):
+        if field in STATIC_VHOST_INHERIT_EXCEPTIONS:
+            continue
+        if field not in inherit_fields:
+            errors.append(
+                f"vpn.h: static_cfg_st field '{field}' is "
+                f"[scope: vhost (non-reloadable)] but is not referenced in "
+                f"vhost_inherit_static_config() — add inheritance or add to "
+                f"STATIC_VHOST_INHERIT_EXCEPTIONS"
+            )
 
     # Report
     if errors:

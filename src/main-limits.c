@@ -53,8 +53,8 @@ void set_main_fd_limits(main_server_st *s)
 	unsigned int max;
 	int ret;
 
-	if (GETCONFIG(s)->max_clients > 0)
-		max = MAX_FD_LIMIT(GETCONFIG(s)->max_clients);
+	if (GETRCONFIG(s)->max_clients > 0)
+		max = MAX_FD_LIMIT(GETRCONFIG(s)->max_clients);
 	else
 		// If the admin doesn't specify max_clients,
 		// then we are limiting it to around 8K.

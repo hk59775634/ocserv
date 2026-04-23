@@ -1,6 +1,6 @@
 test_inc = [top_inc, src_inc, src_build_inc, common_inc]
 
-test_base_deps = [common_dep, ccan_dep, nettle_dep, talloc_dep, llhttp_dep, protobuf_dep]
+test_base_deps = [common_dep, ccan_dep, nettle_dep, talloc_dep, llhttp_dep, protobuf_dep, ipc_dep]
 
 # Tests run with cwd = build tests/ dir; source paths in configs use @SRCDIR@
 test_workdir = meson.current_build_dir()
@@ -65,6 +65,19 @@ cstp_recv_exe = executable('cstp-recv', 'cstp-recv.c',
   include_directories: test_inc,
 )
 test('cstp-recv', cstp_recv_exe, env: test_env, workdir: test_workdir)
+
+# config-inherit: exercises vhost config inheritance (#705).
+# Textually includes config.c and its dependencies so that the static
+# parse_cfg_file() is accessible from the test.  Requires gnutls (for
+# gnutls_idna_map / gnutls_check_version called from config.c) and inih
+# (for ini_parse).
+config_inherit_exe = executable('config-inherit', 'config-inherit.c',
+  c_args: ['-DOCSERV_WORKER_PROCESS'],
+  dependencies: test_base_deps + [gnutls_dep, inih_dep, ipc_dep, pcl_dep],
+  include_directories: test_inc,
+)
+test('config-inherit', config_inherit_exe,
+  env: test_env, workdir: test_workdir, timeout: 30)
 
 # gen_oidc_test_data (only when OIDC enabled)
 if oidc_enabled

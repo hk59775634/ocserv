@@ -72,12 +72,17 @@ int main(void)
 	vhost = talloc_zero(s, struct vhost_cfg_st);
 	if (vhost == NULL)
 		exit(1);
-	vhost->perm_config.config = talloc_zero(vhost, struct cfg_st);
+	vhost->config = talloc_zero(vhost, ReloadableConfig);
+	if (vhost->config != NULL) {
+		/* talloc_zero suffices for test-only field access; no pack/unpack needed */
+		vhost->config->network =
+			talloc_zero(vhost->config, NetworkConfig);
+	}
 
 	list_add(s->vconfig, &vhost->list);
 
-	vhost->perm_config.config->max_ban_score = 20;
-	vhost->perm_config.config->ban_time = 30;
+	vhost->config->max_ban_score = 20;
+	vhost->config->ban_time = 30;
 
 	main_ban_db_init(s);
 
@@ -147,7 +152,7 @@ int main(void)
 	}
 
 	/* check expiration of entries */
-	sleep(GETCONFIG(s)->ban_time + 1);
+	sleep(GETRCONFIG(s)->ban_time + 1);
 
 	if (check_if_banned_str(s, "192.168.1.1") != 0) {
 		fprintf(stderr, "error in %d\n", __LINE__);
@@ -171,7 +176,7 @@ int main(void)
 	}
 
 	/* check cleanup */
-	sleep(GETCONFIG(s)->ban_time + 1);
+	sleep(GETRCONFIG(s)->ban_time + 1);
 
 	cleanup_banned_entries(s);
 

@@ -104,7 +104,7 @@ static unsigned int expand_brackets_string(void *pool, const char *str,
 }
 
 #ifdef HAVE_GSSAPI
-void *gssapi_get_brackets_string(void *pool, struct perm_cfg_st *config,
+void *gssapi_get_brackets_string(void *pool, struct static_cfg_st *config,
 				 const char *str)
 {
 	subcfg_val_st vals[MAX_SUBOPTIONS];
@@ -212,7 +212,7 @@ static void *get_brackets_string2(void *pool, const char *str)
 	return talloc_strndup(pool, p, len);
 }
 
-void *radius_get_brackets_string(void *pool, struct perm_cfg_st *config,
+void *radius_get_brackets_string(void *pool, struct static_cfg_st *config,
 				 const char *str)
 {
 	char *p;
@@ -287,7 +287,7 @@ void *radius_get_brackets_string(void *pool, struct perm_cfg_st *config,
 #endif
 
 #ifdef HAVE_PAM
-void *pam_get_brackets_string(void *pool, struct perm_cfg_st *config,
+void *pam_get_brackets_string(void *pool, struct static_cfg_st *config,
 			      const char *str)
 {
 	subcfg_val_st vals[MAX_SUBOPTIONS];
@@ -320,7 +320,7 @@ void *pam_get_brackets_string(void *pool, struct perm_cfg_st *config,
 }
 #endif
 
-void *plain_get_brackets_string(void *pool, struct perm_cfg_st *config,
+void *plain_get_brackets_string(void *pool, struct static_cfg_st *config,
 				const char *str)
 {
 	subcfg_val_st vals[MAX_SUBOPTIONS];
@@ -363,7 +363,7 @@ void *plain_get_brackets_string(void *pool, struct perm_cfg_st *config,
 	return additional;
 }
 
-void *oidc_get_brackets_string(void *pool, struct perm_cfg_st *config,
+void *oidc_get_brackets_string(void *pool, struct static_cfg_st *config,
 			       const char *str)
 {
 	subcfg_val_st vals[MAX_SUBOPTIONS];

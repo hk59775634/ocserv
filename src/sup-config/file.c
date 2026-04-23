@@ -239,7 +239,7 @@ static int group_cfg_ini_handler(void *_ctx, const char *section,
  * config. The provided config must either be memset to zero, or be
  * already allocated using this function.
  */
-static int parse_group_cfg_file(struct cfg_st *global_config,
+static int parse_group_cfg_file(ReloadableConfig *global_config,
 				SecmSessionReplyMsg *msg, void *pool,
 				const char *file)
 {
@@ -291,7 +291,7 @@ fail:
 	return ret;
 }
 
-static int read_sup_config_file(struct cfg_st *global_config,
+static int read_sup_config_file(ReloadableConfig *global_config,
 				SecmSessionReplyMsg *msg, void *pool,
 				const char *file, const char *fallback,
 				const char *type)
@@ -321,7 +321,7 @@ static int read_sup_config_file(struct cfg_st *global_config,
 	return 0;
 }
 
-static int get_sup_config(struct cfg_st *cfg, client_entry_st *entry,
+static int get_sup_config(ReloadableConfig *cfg, client_entry_st *entry,
 			  SecmSessionReplyMsg *msg, void *pool)
 {
 	char file[_POSIX_PATH_MAX];

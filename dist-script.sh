@@ -29,6 +29,9 @@ fi
 "$PROTOC" --c_out="$DISTROOT/src" \
           --proto_path="$DISTROOT/src" \
           "$DISTROOT/src/ctl.proto"
+"$PROTOC" --c_out="$DISTROOT/src" \
+          --proto_path="$DISTROOT/src" \
+          "$DISTROOT/src/cfg.proto"
 
 # --------------------------------------------------------------------------
 # ASN.1 (GSSAPI / KKDCP)

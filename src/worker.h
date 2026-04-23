@@ -213,8 +213,8 @@ typedef struct worker_st {
 
 	/* pointer inside vconfig */
 #define WSCREDS(ws) (&ws->vhost->creds)
-#define WSCONFIG(ws) (ws->vhost->perm_config.config)
-#define WSPCONFIG(ws) (&ws->vhost->perm_config)
+#define WSRCONFIG(ws) (ws->vhost->config)
+#define WSSCONFIG(ws) (&ws->vhost->static_config)
 	struct vhost_cfg_st *vhost;
 
 	unsigned int auth_state; /* S_AUTH */

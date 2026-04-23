@@ -39,7 +39,7 @@ endif
 # --------------------------------------------------------------------------
 
 gperf    = find_program('gperf', required: false)
-protoc_c = find_program('protoc-c')
+protoc_c = find_program('protoc-c', required: false)
 ipcalc   = find_program(['ipcalc', 'ipcalc-ng'], required: true)
 nft_prog = find_program('nft', required: false)
 

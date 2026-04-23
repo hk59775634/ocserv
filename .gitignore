@@ -44,6 +44,8 @@ src/ipc.pb-c.c
 src/ipc.pb-c.h
 src/ctl.pb-c.c
 src/ctl.pb-c.h
+src/cfg.pb-c.c
+src/cfg.pb-c.h
 src/libipc.a
 src/occtl/occtl
 .dirstamp

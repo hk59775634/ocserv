@@ -53,20 +53,20 @@ void drop_privileges(struct worker_st *ws, main_server_st *s)
 	int ret, e;
 	struct rlimit rl;
 
-	if (GETPCONFIG(s)->chroot_dir) {
-		ret = chdir(GETPCONFIG(s)->chroot_dir);
+	if (GETSCONFIG(s)->chroot_dir) {
+		ret = chdir(GETSCONFIG(s)->chroot_dir);
 		if (ret != 0) {
 			e = errno;
 			oclog(ws, LOG_ERR, "cannot chdir to %s: %s",
-			      GETPCONFIG(s)->chroot_dir, strerror(e));
+			      GETSCONFIG(s)->chroot_dir, strerror(e));
 			exit(EXIT_FAILURE);
 		}
 
-		ret = chroot(GETPCONFIG(s)->chroot_dir);
+		ret = chroot(GETSCONFIG(s)->chroot_dir);
 		if (ret != 0) {
 			e = errno;
 			oclog(ws, LOG_ERR, "cannot chroot to %s: %s",
-			      GETPCONFIG(s)->chroot_dir, strerror(e));
+			      GETSCONFIG(s)->chroot_dir, strerror(e));
 			exit(EXIT_FAILURE);
 		}
 
@@ -79,30 +79,30 @@ void drop_privileges(struct worker_st *ws, main_server_st *s)
 		}
 	}
 
-	if (GETPCONFIG(s)->gid != -1 && (getgid() == 0 || getegid() == 0)) {
-		ret = setgid(GETPCONFIG(s)->gid);
+	if (GETSCONFIG(s)->gid != -1 && (getgid() == 0 || getegid() == 0)) {
+		ret = setgid(GETSCONFIG(s)->gid);
 		if (ret < 0) {
 			e = errno;
 			oclog(ws, LOG_ERR, "cannot set gid to %d: %s\n",
-			      (int)GETPCONFIG(s)->gid, strerror(e));
+			      (int)GETSCONFIG(s)->gid, strerror(e));
 			exit(EXIT_FAILURE);
 		}
 
-		ret = setgroups(1, &GETPCONFIG(s)->gid);
+		ret = setgroups(1, &GETSCONFIG(s)->gid);
 		if (ret < 0) {
 			e = errno;
 			oclog(ws, LOG_ERR, "cannot set groups to %d: %s\n",
-			      (int)GETPCONFIG(s)->gid, strerror(e));
+			      (int)GETSCONFIG(s)->gid, strerror(e));
 			exit(EXIT_FAILURE);
 		}
 	}
 
-	if (GETPCONFIG(s)->uid != -1 && (getuid() == 0 || geteuid() == 0)) {
-		ret = setuid(GETPCONFIG(s)->uid);
+	if (GETSCONFIG(s)->uid != -1 && (getuid() == 0 || geteuid() == 0)) {
+		ret = setuid(GETSCONFIG(s)->uid);
 		if (ret < 0) {
 			e = errno;
 			oclog(ws, LOG_ERR, "cannot set uid to %d: %s\n",
-			      (int)GETPCONFIG(s)->uid, strerror(e));
+			      (int)GETSCONFIG(s)->uid, strerror(e));
 			exit(EXIT_FAILURE);
 		}
 	}
