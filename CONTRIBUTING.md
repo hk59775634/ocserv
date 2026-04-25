@@ -55,11 +55,46 @@ as compiling and testing code and features.
 [Guidelines to consider when reviewing.](https://github.com/thoughtbot/guides/tree/master/code-review)
 
 
+## Before opening a merge request
+
+No review will begin before CI passes.
+
+- [ ] CI passes
+- [ ] Every changed line is relevant to the change — no drive-by refactoring
+- [ ] `ninja -C build` succeeds after each commit, not just at the final set
+- [ ] Every commit has `Signed-off-by: Your Name <email@example.com>`
+- [ ] Both a positive test (correct behavior) and a negative test (bad input rejected)
+- [ ] No new Linux-specific syscalls without `#ifdef __linux__` guard
+
+
 ## CCAN
 
 The directory `src/ccan` contains libraries from the
 [CCAN project](https://github.com/rustyrussell/ccan).
 When considering a helper module, check CCAN first.
+
+
+## AI Assistance Policy
+
+AI tool use is assumed and does not require disclosure. What matters is human
+accountability: every line you submit is your responsibility, regardless of how
+it was generated. Reviewers will hold you accountable as the author.
+
+**If you use AI assistance:**
+
+- Follow the guidance in [`AGENTS.md`](AGENTS.md) for all AI-assisted work.
+- External contributors should load the `ocserv-contributor` persona
+  (`contrib/ai/personas/ocserv-contributor.md`) before starting.
+- Maintainers doing AI-assisted review or development should load the
+  `ocserv-core-dev` persona (`contrib/ai/personas/ocserv-core-dev.md`).
+
+**Review calibration:** Reviewers may ask how a contribution was developed if it
+raises quality questions. Be prepared to explain your approach. Submissions that
+show signs of unchecked generation — hallucinated API calls, missing tests, style
+inconsistencies — may be returned with a request for additional work rather than
+an inline review.
+
+**Not acceptable:** Submitting code you cannot explain or defend. Own your patch.
 
 
 # Coding style
