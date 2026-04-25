@@ -91,7 +91,8 @@ fi
 
 ${CMDNS2} ${SERV} -p ${PIDFILE} -f -c ${CONFIG} ${DEBUG} & PID=$!
 
-sleep 4
+wait_file_contents "${RADIUSLOG}" "Ready to process requests" 30
+wait_ns_port t ${PORT}
 
 USERNAME=test-multi-class
 GROUP=unknown

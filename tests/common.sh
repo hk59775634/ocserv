@@ -281,6 +281,34 @@ check_if_port_in_use() {
 	$PFCMD -an|grep "[\:\.]$PORT" >/dev/null 2>&1
 }
 
+# wait_ns_port PROTO PORT [MAX_SECS]
+# Poll inside CMDNS2 until the given port is listening, or exit on timeout.
+# PROTO is 't' for TCP or 'u' for UDP.  Requires CMDNS2 to be set (ns.sh).
+wait_ns_port() {
+	local proto="$1" port="$2" max="${3:-30}" elapsed=0
+	while [ "${elapsed}" -lt "${max}" ]; do
+		${CMDNS2} ss -${proto}lnp 2>/dev/null | grep -q ":${port}" && return 0
+		sleep 1
+		elapsed=$((elapsed + 1))
+	done
+	echo "Timeout: port ${port} not ready after ${max}s" >&2
+	exit 1
+}
+
+# wait_file_contents FILE PATTERN [MAX_SECS]
+# Poll until FILE contains PATTERN (ERE), or exit on timeout.
+# Polls every second; safe to call before the file exists.
+wait_file_contents() {
+	local file="$1" pattern="$2" max="${3:-60}" elapsed=0
+	while [ "${elapsed}" -lt "${max}" ]; do
+		grep -qE "${pattern}" "${file}" 2>/dev/null && return 0
+		sleep 1
+		elapsed=$((elapsed + 1))
+	done
+	echo "Timeout: '${pattern}' not found in ${file} after ${max}s" >&2
+	exit 1
+}
+
 # Find a port number not currently in use.
 GETPORT='
     rc=0

@@ -66,28 +66,6 @@ function finish {
 }
 trap finish EXIT
 
-function wait_file_contents {
-  local file=$1
-  local contents=$2
-  local max_time=$3
-  local time=0
-
-  while [ ${time} -lt ${max_time} ]
-  do
-    sleep 5
-    grep -E "${contents}" "${file}" >/dev/null
-    if test $? = 0;then
-      echo "Found ${contents} (waited ${time})"
-      return 0
-    fi
-    let time+=5
-  done
-
-  #timeout
-  echo "Could not find ${contents} in ${file} after ${time} secs"
-  exit 1
-}
-
 # server address
 . `dirname $0`/random-net.sh
 
@@ -115,7 +93,8 @@ fi
 
 ${CMDNS2} ${SERV} -p ${PIDFILE} -f -c ${CONFIG} ${DEBUG} & PID=$!
 
-sleep 4
+wait_file_contents "${RADIUSLOG}" "Ready to process requests" 30
+wait_ns_port t ${PORT}
 
 echo " * Connecting to ${ADDRESS}:${PORT}..."
 USERNAME=testtime
