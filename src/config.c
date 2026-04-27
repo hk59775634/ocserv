@@ -436,7 +436,7 @@ static void figure_acct_funcs(void *pool, const char *vhostname,
 			      struct static_cfg_st *config, const char *acct,
 			      unsigned int is_worker)
 {
-	unsigned int i;
+	int i;
 	unsigned int found = 0;
 
 	if (acct == NULL)
