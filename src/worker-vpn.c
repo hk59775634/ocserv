@@ -2321,10 +2321,10 @@ static int connect_handler(worker_st *ws)
 
 	} else {
 		/* default route */
-		WSRCONFIG(ws)->tunnel_all_dns = 1;
+		ws->user_config->tunnel_all_dns = 1;
 	}
 
-	if (WSRCONFIG(ws)->tunnel_all_dns) {
+	if (ws->user_config->tunnel_all_dns) {
 		ret = cstp_puts(ws, "X-CSTP-Tunnel-All-DNS: true\r\n");
 	} else {
 		ret = cstp_puts(ws, "X-CSTP-Tunnel-All-DNS: false\r\n");
