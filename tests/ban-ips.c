@@ -72,12 +72,15 @@ int main(void)
 	vhost = talloc_zero(s, struct vhost_cfg_st);
 	if (vhost == NULL)
 		exit(1);
+
 	vhost->config = talloc_zero(vhost, ReloadableConfig);
-	if (vhost->config != NULL) {
-		/* talloc_zero suffices for test-only field access; no pack/unpack needed */
-		vhost->config->network =
-			talloc_zero(vhost->config, NetworkConfig);
-	}
+	if (vhost->config == NULL)
+		exit(1);
+
+	/* talloc_zero suffices for test-only field access; no pack/unpack needed */
+	vhost->config->network = talloc_zero(vhost->config, NetworkConfig);
+	if (vhost->config->network == NULL)
+		exit(1);
 
 	list_add(s->vconfig, &vhost->list);
 
