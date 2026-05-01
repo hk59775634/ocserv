@@ -79,6 +79,8 @@ int main(void)
 
 	/* talloc_zero suffices for test-only field access; no pack/unpack needed */
 	vhost->config->network = talloc_zero(vhost->config, NetworkConfig);
+	if (vhost->config->network == NULL)
+		exit(1);
 
 	list_add(s->vconfig, &vhost->list);
 
