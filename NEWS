@@ -3,6 +3,7 @@
 - Vhosts now inherit configuration options from the default vhost if
   they are not overridden (#705)
 - `tunnel-all-dns` now works correctly when set in per-user/group config (#708)
+- radius: fixed Framed-IPv6-Prefix routes being silently dropped (#710)
 
 
 * Version 1.4.2 (released 2026-04-16)

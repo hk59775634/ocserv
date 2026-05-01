@@ -487,8 +487,8 @@ static int radius_auth_pass(void *ctx, const char *pass, unsigned int pass_len)
 							"%s/%u", txt,
 							(unsigned int)(unsigned char)
 								vp->strvalue[1]);
-						append_route(pctx, vp->strvalue,
-							     vp->lvalue);
+						append_route(pctx, route,
+							     strlen(route));
 					}
 				}
 			} else if (vp->attribute ==
