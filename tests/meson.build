@@ -96,6 +96,7 @@ always_scripts = [
   'test-owasp-headers',
   'test-replay',
   'test-fw-normalize-route',
+  'test-http-limits',
 ]
 
 foreach s : always_scripts

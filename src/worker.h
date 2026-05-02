@@ -134,6 +134,7 @@ struct http_req_st {
 	str_st header;
 	str_st value;
 	unsigned int header_state;
+	size_t header_bytes;
 
 	char devtype[MAX_AGENT_NAME]; /* Device-Type */
 	char devplatform[MAX_AGENT_NAME]; /* Device-Platform */

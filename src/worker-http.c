@@ -45,6 +45,7 @@
  * largest legitimate payload (KKDCP Kerberos messages, ~64 KB encoded) while
  * preventing unauthenticated clients from exhausting worker memory. */
 #define MAX_HTTP_REQUEST_BODY (256 * 1024)
+#define MAX_HTTP_HEADERS_SIZE (16 * 1024)
 
 struct known_urls_st {
 	const char *url;
@@ -828,6 +829,15 @@ int http_header_field_cb(llhttp_t *parser, const char *at, size_t length)
 		str_reset(&req->header);
 	}
 
+	if (length > MAX_HTTP_HEADERS_SIZE ||
+	    req->header_bytes > MAX_HTTP_HEADERS_SIZE - length) {
+		oclog(ws, LOG_HTTP_DEBUG,
+		      "HTTP headers size limit exceeded (%zu+%zu > %u)",
+		      req->header_bytes, length, MAX_HTTP_HEADERS_SIZE);
+		return -1;
+	}
+	req->header_bytes += length;
+
 	ret = str_append_data(&req->header, at, length);
 	if (ret < 0)
 		return -1;
@@ -862,6 +872,15 @@ int http_header_value_cb(llhttp_t *parser, const char *at, size_t length)
 		req->header_state = HTTP_HEADER_VALUE_RECV;
 		str_reset(&req->value);
 	}
+
+	if (length > MAX_HTTP_HEADERS_SIZE ||
+	    req->header_bytes > MAX_HTTP_HEADERS_SIZE - length) {
+		oclog(ws, LOG_HTTP_DEBUG,
+		      "HTTP headers size limit exceeded (%zu+%zu > %u)",
+		      req->header_bytes, length, MAX_HTTP_HEADERS_SIZE);
+		return -1;
+	}
+	req->header_bytes += length;
 
 	ret = str_append_data(&req->value, at, length);
 	if (ret < 0)
@@ -937,6 +956,7 @@ void http_req_reset(worker_st *ws)
 	ws->req.headers_complete = 0;
 	ws->req.message_complete = 0;
 	ws->req.body_length = 0;
+	ws->req.header_bytes = 0;
 	ws->req.spnego_set = 0;
 	ws->req.url[0] = 0;
 
