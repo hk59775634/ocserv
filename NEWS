@@ -1,3 +1,7 @@
+* Version 1.5.1 (unreleased)
+- ocpasswd: Use the system default hash algorithm to hash ocserv passwords.
+
+
 * Version 1.5.0 (released 2026-06-07)
 - [SECURITY] Fixed unauthenticated heap buffer overflow in the unprivileged
   worker process via an oversized webvpncontext= cookie value (#719)
