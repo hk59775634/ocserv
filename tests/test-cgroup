@@ -1,0 +1,85 @@
+#!/bin/bash
+#
+# Copyright (C) 2026 Red Hat, Inc.
+#
+# This file is part of ocserv.
+#
+# ocserv is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at
+# your option) any later version.
+#
+# ocserv is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with GnuTLS; if not, write to the Free Software Foundation,
+# Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+
+SERV="${SERV:-../src/ocserv}"
+srcdir=${srcdir:-.}
+PIDFILE=ocserv-pid.$$.tmp
+CLIPID=cgroup-client-pid.$$.tmp
+
+. `dirname $0`/common.sh
+
+eval "${GETPORT}"
+
+echo "Testing cgroups v2 worker process placement..."
+
+# Require cgroups v2 unified hierarchy
+if ! test -e /sys/fs/cgroup/cgroup.controllers; then
+	echo "cgroups v2 not available, skipping"
+	exit 77
+fi
+
+CGROUP="ocserv-test-$$"
+CGROUP_PATH="/sys/fs/cgroup/${CGROUP}"
+
+mkdir -p "${CGROUP_PATH}" 2>/dev/null || {
+	echo "cannot create cgroup ${CGROUP_PATH}, skipping"
+	exit 77
+}
+
+# Kill client, server, and remove the test cgroup on any exit.
+# Must kill client before server so the worker exits and empties the cgroup
+# before rmdir is attempted (rmdir fails on a non-empty cgroup).
+cgroup_cleanup() {
+	test -f "${CLIPID}" && kill "$(cat "${CLIPID}")" 2>/dev/null
+	rm -f "${CLIPID}"
+	cleanup
+	rmdir "${CGROUP_PATH}" 2>/dev/null
+}
+trap cgroup_cleanup EXIT
+
+update_config test1.config
+echo "cgroup = \"${CGROUP}\"" >> "${CONFIG}"
+
+launch_simple_server -d 1 -p "${PIDFILE}" -f -c "${CONFIG}"
+PID=$!
+wait_server $PID
+
+echo -n "Connecting client to trigger worker placement... "
+( echo "test" | $OPENCONNECT -q localhost:$PORT -u test \
+	--servercert=pin-sha256:xp3scfzy3rOQsv9NcOve/8YVVv+pHr4qNCXEXrNl5s8= \
+	-s /bin/true --passwd-on-stdin --pid-file="${CLIPID}" -b )
+if test $? != 0; then
+	fail $PID "Could not connect to server"
+fi
+echo ok
+
+sleep 2
+
+echo -n "Checking worker PID appears in cgroup.procs... "
+PROCS=$(cat "${CGROUP_PATH}/cgroup.procs" 2>/dev/null)
+echo "cgroup.procs contents: '${PROCS}'"
+if test -z "${PROCS}"; then
+	echo "cgroup directory listing:"
+	ls -la "${CGROUP_PATH}" 2>&1 || true
+	fail $PID "No processes found in cgroup ${CGROUP}"
+fi
+echo "ok (worker PIDs: ${PROCS})"
+
+exit 0
