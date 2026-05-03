@@ -805,7 +805,7 @@ int http_url_cb(llhttp_t *parser, const char *at, size_t length)
 
 	if (length >= sizeof(req->url)) {
 		req->url[0] = 0;
-		return 1;
+		return -1;
 	}
 
 	memcpy(req->url, at, length);
@@ -830,7 +830,7 @@ int http_header_field_cb(llhttp_t *parser, const char *at, size_t length)
 
 	ret = str_append_data(&req->header, at, length);
 	if (ret < 0)
-		return ret;
+		return -1;
 
 	return 0;
 }
@@ -865,7 +865,7 @@ int http_header_value_cb(llhttp_t *parser, const char *at, size_t length)
 
 	ret = str_append_data(&req->value, at, length);
 	if (ret < 0)
-		return ret;
+		return -1;
 
 	return 0;
 }
