@@ -1373,8 +1373,6 @@ static int cfg_ini_handler(void *_ctx, const char *section, const char *name,
 		if (error_on_vhost(vhost->name, "device"))
 			return 0;
 		PREAD_STRING(config->network, config->network->name);
-	} else if (strcmp(name, "cgroup") == 0) {
-		READ_STRING(config->cgroup);
 	} else if (strcmp(name, "proxy-url") == 0) {
 		READ_STRING(config->proxy_url);
 	} else if (strcmp(name, "ipv4-network") == 0) {

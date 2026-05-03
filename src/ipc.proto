@@ -43,7 +43,7 @@ message group_cfg_st
 	optional string ipv4_netmask = 18;
 	optional string ipv6_net = 19;
 	optional uint32 ipv6_prefix = 20;
-	optional string cgroup = 21;
+
 	optional string xml_config_file = 22;
 	optional uint32 rx_per_sec = 23;
 	optional uint32 tx_per_sec = 24;
