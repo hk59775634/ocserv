@@ -436,6 +436,8 @@ codingstyle/Fedora:
   image: $CI_REGISTRY/$BUILD_IMAGES_PROJECT:$FEDORA_BUILD
   script:
   - find src/ tests/ -name '*.[ch]'| grep -Ev '^(src/http-heads.c|src/cfg.pb-c|src/ipc.pb-c|src/ctl.pb-c|src/pcl|src/protobuf|src/ccan|src/gnulib|src/inih|src/llhttp)'| xargs -I{} clang-format -style=file --dry-run {} -Werror
+  - meson format --recursive --inplace
+  - git diff --exit-code
   tags:
   - saas-linux-small-amd64
   except:
