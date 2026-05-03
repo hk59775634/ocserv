@@ -38,9 +38,9 @@ endif
 # Required tools
 # --------------------------------------------------------------------------
 
-gperf    = find_program('gperf', required: false)
-protoc_c = find_program('protoc-c', required: false)
-ipcalc   = find_program(['ipcalc', 'ipcalc-ng'], required: false)
+gperf  = find_program('gperf', required: false)
+protoc = find_program(['protoc', 'protoc-c'], required: false)
+ipcalc = find_program(['ipcalc', 'ipcalc-ng'], required: false)
 
 # Firewall script selection
 _fw_opt = get_option('firewall-script')

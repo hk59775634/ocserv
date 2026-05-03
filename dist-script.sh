@@ -18,9 +18,9 @@ require_cmd() {
 # Protocol buffers: ipc.proto and ctl.proto
 # --------------------------------------------------------------------------
 
-PROTOC=$(command -v protoc-c 2>/dev/null || command -v protoc 2>/dev/null || true)
+PROTOC=$(command -v protoc 2>/dev/null || command -v protoc-c 2>/dev/null || true)
 if [ -z "$PROTOC" ]; then
-    echo "dist-script: ERROR: protoc-c/protoc not found; install it to create a dist tarball" >&2
+    echo "dist-script: ERROR: protoc/protoc-c not found; install it to create a dist tarball" >&2
     exit 1
 fi
 "$PROTOC" --c_out="$DISTROOT/src" \
