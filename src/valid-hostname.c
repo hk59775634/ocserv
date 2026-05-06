@@ -24,6 +24,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <arpa/inet.h>
+#include <sys/socket.h>
 
 /* Validates a single hostname label per RFC 952 as updated by RFC 1123:
  *  - first character: letter or digit (RFC 1123 relaxes RFC 952's letter-only rule)
