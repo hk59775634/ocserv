@@ -213,7 +213,7 @@ static void append_route(struct radius_ctx_st *pctx, const char *route,
 			 unsigned int len)
 {
 	unsigned int i;
-	char *p;
+	const char *p;
 
 	/* accept route/mask */
 	p = strchr(route, '/');
@@ -242,7 +242,7 @@ static void append_route(struct radius_ctx_st *pctx, const char *route,
 }
 
 /* Parses group of format "OU=group1<sep>group2<sep>group3" */
-static void parse_groupnames(struct radius_ctx_st *pctx, const char *full)
+static void parse_groupnames(struct radius_ctx_st *pctx, char *full)
 {
 	char *p, *p2;
 	const char *sep = pctx->vctx->group_separator;

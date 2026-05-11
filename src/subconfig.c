@@ -45,7 +45,7 @@ static void free_expanded_brackets_string(subcfg_val_st out[MAX_SUBOPTIONS],
 static unsigned int expand_brackets_string(void *pool, const char *str,
 					   subcfg_val_st out[MAX_SUBOPTIONS])
 {
-	char *p, *p2, *p3;
+	const char *p, *p2, *p3;
 	unsigned int len, len2;
 	unsigned int pos = 0, finish = 0;
 
@@ -152,7 +152,7 @@ void *gssapi_get_brackets_string(void *pool, struct static_cfg_st *config,
 
 void *get_brackets_string1(void *pool, const char *str)
 {
-	char *p, *p2;
+	const char *p, *p2;
 	unsigned int len;
 
 	p = strchr(str, '[');
@@ -180,7 +180,7 @@ void *get_brackets_string1(void *pool, const char *str)
 #ifdef HAVE_RADIUS
 static void *get_brackets_string2(void *pool, const char *str)
 {
-	char *p, *p2;
+	const char *p, *p2;
 	unsigned int len;
 
 	p = strchr(str, '[');
@@ -215,7 +215,7 @@ static void *get_brackets_string2(void *pool, const char *str)
 void *radius_get_brackets_string(void *pool, struct static_cfg_st *config,
 				 const char *str)
 {
-	char *p;
+	const char *p;
 	subcfg_val_st vals[MAX_SUBOPTIONS];
 	unsigned int vals_size, i;
 	radius_cfg_st *additional;
