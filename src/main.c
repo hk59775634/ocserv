@@ -1282,7 +1282,7 @@ static void listen_watcher_cb(EV_P_ ev_io *w, int revents)
 				if (path_length == -1) {
 					mslog(s, NULL, LOG_ERR,
 					      "readlink failed %s",
-					      strerror(ret));
+					      strerror(errno));
 					exit(EXIT_FAILURE);
 				}
 				path[path_length] = '\0';
@@ -1877,7 +1877,7 @@ static bool set_env_from_ws(main_server_st *s)
 		}
 		if (rr < 0) {
 			mslog(s, NULL, LOG_ERR,
-			      "snapshot restoration failed (%d)\n", ret);
+			      "snapshot restoration failed (%d)\n", rr);
 			goto cleanup;
 		}
 

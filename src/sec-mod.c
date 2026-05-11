@@ -245,8 +245,7 @@ static int process_worker_packet(void *pool, int cfd, pid_t pid,
 		sec_get_pk_msg__free_unpacked(pkm, &pa);
 
 		if (ret < 0) {
-			seclog(sec, LOG_INFO, "error sending reply: %s",
-			       gnutls_strerror(ret));
+			seclog(sec, LOG_INFO, "error sending reply");
 			return -1;
 		}
 
