@@ -8,9 +8,9 @@ variables:
   ALPINE_BUILD: buildenv-alpine
   DEBIAN_BUILD: buildenv-debian
   DEBIAN_X86_CROSS_BUILD: buildenv-debian-x86
-  FEDORA_BUILD: buildenv-fedora43
+  FEDORA_BUILD: buildenv-fedora44
   UBUNTU22_BUILD: buildenv-ubuntu22
-  UBUNTU24_BUILD: buildenv-ubuntu24
+  UBUNTU26_BUILD: buildenv-ubuntu26
   CENTOS8_BUILD: buildenv-centos8
   CENTOS9_BUILD: buildenv-centos9
   CENTOS10_BUILD: buildenv-centos10
@@ -79,9 +79,9 @@ i386/Debian:
     paths:
       - build/meson-logs/
 
-Ubuntu24.04:
+Ubuntu26.04:
   stage: testing
-  image: $CI_REGISTRY/$BUILD_IMAGES_PROJECT:$UBUNTU24_BUILD
+  image: $CI_REGISTRY/$BUILD_IMAGES_PROJECT:$UBUNTU26_BUILD
   script:
   - git submodule update --init
   - meson setup build -Doidc-auth=enabled -Dlatency-stats=enabled
@@ -372,9 +372,9 @@ minimal:
       - build/meson-logs/
 
 # Build a minimal version with every optional feature disabled
-minimal/Ubuntu24.04:
+minimal/Ubuntu26.04:
   stage: testing
-  image: $CI_REGISTRY/$BUILD_IMAGES_PROJECT:$UBUNTU24_BUILD
+  image: $CI_REGISTRY/$BUILD_IMAGES_PROJECT:$UBUNTU26_BUILD
   script:
   - git submodule update --init
   - meson setup build $MINIMAL_OPTIONS
