@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Run by 'meson dist' to add pre-generated files that autotools used to
 # distribute via EXTRA_DIST.  MESON_PROJECT_DIST_ROOT points to the
 # unpacked dist tree that meson is building the tarball from.
@@ -18,9 +18,9 @@ require_cmd() {
 # Protocol buffers: ipc.proto and ctl.proto
 # --------------------------------------------------------------------------
 
-PROTOC=$(command -v protoc-c 2>/dev/null || command -v protoc 2>/dev/null || true)
+PROTOC=$(command -v protoc 2>/dev/null || command -v protoc-c 2>/dev/null || true)
 if [ -z "$PROTOC" ]; then
-    echo "dist-script: ERROR: protoc-c/protoc not found; install it to create a dist tarball" >&2
+    echo "dist-script: ERROR: protoc/protoc-c not found; install it to create a dist tarball" >&2
     exit 1
 fi
 "$PROTOC" --c_out="$DISTROOT/src" \

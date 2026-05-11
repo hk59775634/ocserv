@@ -55,25 +55,25 @@ version_inc = configure_file(
 )
 
 # Protocol buffers
-if protoc_c.found()
+if protoc.found()
   ipc_proto = custom_target('ipc-proto',
     input:   'ipc.proto',
     output:  ['ipc.pb-c.c', 'ipc.pb-c.h'],
-    command: [protoc_c, '--c_out=@OUTDIR@',
+    command: [protoc, '--c_out=@OUTDIR@',
               '--proto_path=@CURRENT_SOURCE_DIR@', '@INPUT@'],
   )
   ctl_proto = custom_target('ctl-proto',
     input:   'ctl.proto',
     output:  ['ctl.pb-c.c', 'ctl.pb-c.h'],
     depends: ipc_proto,
-    command: [protoc_c, '--c_out=@OUTDIR@',
+    command: [protoc, '--c_out=@OUTDIR@',
               '--proto_path=@CURRENT_SOURCE_DIR@', '@INPUT@'],
   )
   cfg_proto = custom_target('cfg-proto',
     input:   'cfg.proto',
     output:  ['cfg.pb-c.c', 'cfg.pb-c.h'],
     depends: ipc_proto,
-    command: [protoc_c, '--c_out=@OUTDIR@',
+    command: [protoc, '--c_out=@OUTDIR@',
               '--proto_path=@CURRENT_SOURCE_DIR@', '@INPUT@'],
   )
 elif fs.exists('ipc.pb-c.c') and fs.exists('ctl.pb-c.c') and fs.exists('cfg.pb-c.c')
