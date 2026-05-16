@@ -228,6 +228,7 @@ static void append_routes(sec_mod_instance_st *sec_mod_instance, proc_st *proc,
 	/* if we have known_iroutes, we must append them to the routes list */
 	if (vhost->config->n_known_iroutes > 0 ||
 	    vhost->config->append_routes) {
+		main_server_st *s = sec_mod_instance->server;
 		char **old_routes = gc->routes;
 		unsigned int old_routes_size = gc->n_routes;
 		unsigned int i, j, append;
@@ -237,9 +238,14 @@ static void append_routes(sec_mod_instance_st *sec_mod_instance, proc_st *proc,
 		if (vhost->config->append_routes)
 			to_append += vhost->config->network->n_routes;
 
-		gc->n_routes = 0;
 		gc->routes =
 			talloc_array(proc, char *, old_routes_size + to_append);
+		if (gc->routes == NULL) {
+			gc->routes = old_routes;
+			mslog(s, proc, LOG_ERR, "memory error");
+			return;
+		}
+		gc->n_routes = 0;
 
 		for (i = 0; i < old_routes_size; i++) {
 			gc->routes[i] = talloc_strdup(proc, old_routes[i]);
@@ -295,11 +301,16 @@ static void append_routes(sec_mod_instance_st *sec_mod_instance, proc_st *proc,
 			old_routes = gc->no_routes;
 			old_routes_size = gc->n_no_routes;
 
-			gc->n_no_routes = 0;
 			gc->no_routes = talloc_array(
 				proc, char *,
 				old_routes_size +
 					vhost->config->network->n_no_routes);
+			if (gc->no_routes == NULL) {
+				gc->no_routes = old_routes;
+				mslog(s, proc, LOG_ERR, "memory error");
+				return;
+			}
+			gc->n_no_routes = 0;
 
 			for (i = 0; i < old_routes_size; i++) {
 				gc->no_routes[i] =

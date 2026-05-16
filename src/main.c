@@ -1880,6 +1880,10 @@ static bool set_env_from_ws(main_server_st *s)
 		}
 
 		entries[index] = talloc_zero(s, SnapshotEntryMsg);
+		if (entries[index] == NULL) {
+			mslog(s, NULL, LOG_ERR, "memory error");
+			goto cleanup;
+		}
 		*entries[index] = entry_template;
 		entries[index]->file_descriptor = fd;
 		entries[index]->file_name = (char *)file_name;
