@@ -110,6 +110,7 @@ always_scripts = [
   'test-fw-normalize-route',
   'test-http-limits',
   'test-http-smuggling',
+  'test-cookie-sid-overflow',
 ]
 
 foreach s : always_scripts
