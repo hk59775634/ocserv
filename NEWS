@@ -1,4 +1,6 @@
 * Version 1.5.0 (unreleased)
+- [SECURITY] Fixed unauthenticated heap buffer overflow in the unprivileged
+  worker process via an oversized webvpncontext= cookie value (#719)
 - Added `syslog-facility` option to log to specified syslog facility (#691)
 - Fixed worker hang when a client disappears silently (#638)
 - Removed the 'cgroup' configuration option (used for cgroups v1).
