@@ -45,57 +45,32 @@
 #include <ccan/list/list.h>
 #include <common.h>
 
-/* Puts the provided PIN into the config's cgroup */
-void put_into_cgroup(main_server_st *s, const char *_cgroup, pid_t pid)
+/* Puts the provided PID into the named cgroups v2 unified hierarchy */
+void put_into_cgroup(main_server_st *s, const char *cgroup, pid_t pid)
 {
 #ifdef __linux__
-	char *name, *p, *savep;
-	char cgroup[128];
 	char file[_POSIX_PATH_MAX];
 	FILE *fd;
 
-	if (_cgroup == NULL)
+	if (cgroup == NULL)
 		return;
 
-	/* format: cpu,memory:cgroup-name */
-	strlcpy(cgroup, _cgroup, sizeof(cgroup));
-
-	name = strchr(cgroup, ':');
-	if (name == NULL) {
-		mslog(s, NULL, LOG_ERR, "error parsing cgroup name: %s",
-		      cgroup);
+	snprintf(file, sizeof(file), "/sys/fs/cgroup/%s/cgroup.procs", cgroup);
+	fd = fopen(file, "w");
+	if (fd == NULL) {
+		mslog(s, NULL, LOG_ERR, "cannot open cgroup file '%s': %s",
+		      file, strerror(errno));
 		return;
 	}
-	name[0] = 0;
-	name++;
-
-	p = strtok_r(cgroup, ",", &savep);
-	while (p != NULL) {
-		mslog(s, NULL, LOG_DEBUG,
-		      "putting process %u to cgroup '%s:%s'", (unsigned int)pid,
-		      p, name);
-
-		snprintf(file, sizeof(file), "/sys/fs/cgroup/%s/%s/tasks", p,
-			 name);
-
-		fd = fopen(file, "w");
-		if (fd == NULL) {
-			mslog(s, NULL, LOG_ERR, "cannot open: %s", file);
-			return;
-		}
-
-		if (fprintf(fd, "%u", (unsigned int)pid) <= 0) {
-			mslog(s, NULL, LOG_ERR, "could not write to: %s", file);
-		}
-		fclose(fd);
-		p = strtok_r(NULL, ",", &savep);
-	}
-
-	return;
+	fprintf(fd, "%u", (unsigned int)pid);
+	fclose(fd);
+	mslog(s, NULL, LOG_DEBUG, "putting process %u to cgroup '%s'",
+	      (unsigned int)pid, cgroup);
 #else
-	if (_cgroup != NULL)
-		mslog(s, NULL, LOG_WARNING,
-		      "Ignoring cgroup option as it is not supported on this system");
+	if (cgroup != NULL)
+		mslog(s, NULL, LOG_INFO,
+		      "Ignoring cgroup option as it is not "
+		      "supported on this system");
 #endif
 }
 
