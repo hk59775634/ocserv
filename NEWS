@@ -14,6 +14,7 @@
   body limit
 - Fix build issue on FreeBSD (#704)
 - Build against Nettle 4.
+- Avoid infinite loop in BSD TUN fallback (#733).
 
 
 * Version 1.4.2 (released 2026-04-16)
