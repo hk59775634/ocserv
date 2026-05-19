@@ -533,9 +533,10 @@ static int os_open_tun(main_server_st *s, struct proc_st *proc)
 		mslog(s, NULL, LOG_DEBUG,
 		      "cannot open /dev/tun; falling back to iteration: %s",
 		      strerror(e));
-		for (unit_nr = 0; GETRCONFIG(s)->max_clients > 0 ?
-					  GETRCONFIG(s)->max_clients :
-					  8192;
+		for (unit_nr = 0;
+		     unit_nr < (GETRCONFIG(s)->max_clients > 0 ?
+					GETRCONFIG(s)->max_clients :
+					8192);
 		     unit_nr++) {
 			snprintf(proc->tun_lease.name,
 				 sizeof(proc->tun_lease.name), "/dev/tun%d",
