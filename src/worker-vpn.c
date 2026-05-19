@@ -1710,14 +1710,18 @@ cleanup:
  * (ICMP, IGMP). */
 static bool is_data(const uint8_t *data, size_t size)
 {
+	/* 20 is the minimum IPv4 header size; it also guarantees safe access to
+	 * offset 9 (IPv4 Protocol) and offset 6 (IPv6 Next Header). */
 	if (size > 20) {
 		uint8_t version = data[0] >> 4;
 
 		if (version == 0x04) {
-			if (data[9] == 0x01 || data[9] == 0x02) /* ICMP/IGMP */
+			/* IPv4: Protocol field is at offset 9 (RFC 791). */
+			if (data[9] == IPPROTO_ICMP || data[9] == IPPROTO_IGMP)
 				return 0;
 		} else if (version == 0x06) {
-			if (data[9] == 0x3A || data[9] == 0x80)
+			/* IPv6: Next Header field is at offset 6 (RFC 8200 §3). */
+			if (data[6] == IPPROTO_ICMPV6)
 				return 0;
 		}
 	}
