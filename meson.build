@@ -51,7 +51,7 @@ message('firewall script: ' + fw_script_type)
 # Required dependencies
 # --------------------------------------------------------------------------
 
-gnutls_dep  = dependency('gnutls',  version: '>= 3.3.0')
+gnutls_dep  = dependency('gnutls',  version: '>= 3.3.5')
 nettle_dep  = dependency('nettle',  version: '>= 2.7')
 libev_dep   = cc.find_library('ev', required: true)
 

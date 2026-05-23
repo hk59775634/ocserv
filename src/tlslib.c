@@ -228,7 +228,6 @@ static ssize_t _cstp_recv_packet(worker_st *ws, void *data, size_t data_size)
 ssize_t cstp_recv_packet(worker_st *ws, gnutls_datum_t *data, void **p)
 {
 	int ret;
-#ifdef ZERO_COPY
 	gnutls_packet_t packet = NULL;
 
 	if (ws->session != NULL) {
@@ -243,11 +242,6 @@ ssize_t cstp_recv_packet(worker_st *ws, gnutls_datum_t *data, void **p)
 		data->size = ret;
 	}
 
-#else
-	ret = _cstp_recv_packet(ws, ws->buffer, ws->buffer_size);
-	data->data = ws->buffer;
-	data->size = ret;
-#endif
 	return ret;
 }
 
@@ -349,7 +343,6 @@ void cstp_fatal_close(worker_st *ws, gnutls_alert_description_t a)
 ssize_t dtls_recv_packet(struct dtls_st *dtls, gnutls_datum_t *data, void **p)
 {
 	int ret;
-#ifdef ZERO_COPY
 	gnutls_packet_t packet = NULL;
 
 	ret = gnutls_record_recv_packet(dtls->dtls_session, &packet);
@@ -359,12 +352,6 @@ ssize_t dtls_recv_packet(struct dtls_st *dtls, gnutls_datum_t *data, void **p)
 	} else {
 		data->size = 0;
 	}
-#else
-	ret = gnutls_record_recv(dtls->dtls_session, ws->buffer,
-				 ws->buffer_size);
-	data->data = ws->buffer;
-	data->size = ret;
-#endif
 
 	return ret;
 }
