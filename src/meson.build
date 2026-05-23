@@ -4,6 +4,7 @@
 
 subdir('ccan')
 subdir('inih')
+subdir('pcl')
 
 if use_local_llhttp
   subdir('llhttp')
@@ -14,12 +15,6 @@ if use_local_protobuf
   subdir('protobuf')
 else
   # protobuf_dep already set in top-level meson.build
-endif
-
-if use_local_pcl
-  subdir('pcl')
-else
-  # pcl_dep already set in top-level meson.build
 endif
 
 # --------------------------------------------------------------------------
@@ -38,9 +33,6 @@ if use_local_protobuf
 endif
 if use_local_llhttp
   all_inc += include_directories('llhttp')
-endif
-if use_local_pcl
-  all_inc += include_directories('pcl')
 endif
 
 # --------------------------------------------------------------------------

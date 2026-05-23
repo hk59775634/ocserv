@@ -102,14 +102,6 @@ if not get_option('local-protobuf')
 endif
 use_local_protobuf = not protobuf_dep.found()
 
-# PCL: system or bundled
-pcl_dep = dependency('', required: false)
-if not get_option('local-pcl')
-  pcl_dep = cc.find_library('pcl',
-    has_headers: ['pcl.h'], required: false)
-endif
-use_local_pcl = not pcl_dep.found()
-
 # PAM
 pam_dep = dependency('', required: false)
 if not opt_pam.disabled()
