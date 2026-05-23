@@ -142,8 +142,6 @@ static int group_cfg_ini_handler(void *_ctx, const char *section,
 		READ_RAW_MULTI_LINE(msg->config->nbns, msg->config->n_nbns);
 	} else if (strcmp(name, "ipv6-nbns") == 0) {
 		READ_RAW_MULTI_LINE(msg->config->nbns, msg->config->n_nbns);
-	} else if (strcmp(name, "cgroup") == 0) {
-		READ_RAW_STRING(msg->config->cgroup);
 	} else if (strcmp(name, "ipv4-network") == 0) {
 		READ_RAW_STRING(msg->config->ipv4_net);
 		prefix4 = extract_prefix(msg->config->ipv4_net);

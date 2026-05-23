@@ -141,7 +141,7 @@ message ReloadableConfig {
   optional string connect_script     = 111; /* [scope: global] */
   optional string host_update_script = 112; /* [scope: global] */
   optional string disconnect_script  = 113; /* [scope: global] */
-  optional string cgroup             = 114; /* [scope: vhost user] */
+
   optional string proxy_url          = 115; /* [scope: vhost] */
   optional string xml_config_file    = 116; /* [scope: vhost user] ANYCONNECT_CLIENT_COMPAT only */
   optional string xml_config_hash    = 117; /* [scope: vhost user] ANYCONNECT_CLIENT_COMPAT only */

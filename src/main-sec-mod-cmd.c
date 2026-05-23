@@ -408,10 +408,6 @@ static void apply_default_config(sec_mod_instance_st *sec_mod_instance,
 		gc->has_ipv6_subnet_prefix = 1;
 	}
 
-	if (!gc->cgroup) {
-		gc->cgroup = vhost->config->cgroup;
-	}
-
 #ifdef ANYCONNECT_CLIENT_COMPAT
 	if (!gc->xml_config_file) {
 		gc->xml_config_file = vhost->config->xml_config_file;

@@ -379,8 +379,6 @@ inline static void disconnect_proc(main_server_st *s, proc_st *proc)
 	}
 }
 
-void put_into_cgroup(main_server_st *s, const char *cgroup, pid_t pid);
-
 inline static int send_msg_to_worker(main_server_st *s, struct proc_st *proc,
 				     uint8_t cmd, const void *msg,
 				     pack_size_func get_size, pack_func pack)
