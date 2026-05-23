@@ -31,6 +31,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <poll.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <limits.h>
@@ -102,18 +103,17 @@ ssize_t cstp_send(worker_st *ws, const void *data, size_t data_size)
 
 	if (ws->session != NULL) {
 		while (left > 0) {
-			ret = gnutls_record_send(ws->session, p, data_size);
+			ret = gnutls_record_send(ws->session, p, left);
 			if (ret < 0) {
+				struct pollfd pfd = { ws->conn_fd, POLLOUT, 0 };
 				if (ret != GNUTLS_E_AGAIN &&
-				    ret != GNUTLS_E_INTERRUPTED) {
+				    ret != GNUTLS_E_INTERRUPTED)
 					return ret;
-				} else {
-					/* do not cause mayhem */
-					ms_sleep(20);
-				}
-			}
-
-			if (ret > 0) {
+				/* wait for writability; peer gone if timeout */
+				if (poll(&pfd, 1,
+					 DEFAULT_SOCKET_TIMEOUT * 1000) <= 0)
+					return GNUTLS_E_PUSH_ERROR;
+			} else if (ret > 0) {
 				left -= ret;
 				p += ret;
 			}
@@ -376,18 +376,15 @@ ssize_t dtls_send(struct dtls_st *dtls, const void *data, size_t data_size)
 	const uint8_t *p = data;
 
 	while (left > 0) {
-		ret = gnutls_record_send(dtls->dtls_session, p, data_size);
+		ret = gnutls_record_send(dtls->dtls_session, p, left);
 		if (ret < 0) {
+			struct pollfd pfd = { dtls->dtls_tptr.fd, POLLOUT, 0 };
 			if (ret != GNUTLS_E_AGAIN &&
-			    ret != GNUTLS_E_INTERRUPTED) {
+			    ret != GNUTLS_E_INTERRUPTED)
 				return ret;
-			} else {
-				/* do not cause mayhem */
-				ms_sleep(20);
-			}
-		}
-
-		if (ret > 0) {
+			if (poll(&pfd, 1, DEFAULT_SOCKET_TIMEOUT * 1000) <= 0)
+				return GNUTLS_E_PUSH_ERROR;
+		} else if (ret > 0) {
 			left -= ret;
 			p += ret;
 		}
