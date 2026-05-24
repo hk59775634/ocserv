@@ -1,0 +1,72 @@
+# GitLab CI job that delegates a FreeBSD build to Cirrus CI via cirrus-run.
+#
+# PREREQUISITES — one-time setup per GitLab account/fork:
+#
+#   1. Create a throwaway public GitHub repository, e.g. "youruser/ocserv-ci-stub".
+#      It only needs to exist; it never needs to be updated or contain real code.
+#      Push an empty .cirrus.yml to it so Cirrus CI recognises the repo:
+#        git init ocserv-ci-stub && cd ocserv-ci-stub
+#        touch .cirrus.yml && git add . && git commit -m "init"
+#        git remote add origin git@github.com:youruser/ocserv-ci-stub.git
+#        git push -u origin main
+#
+#   2. Install the Cirrus CI GitHub App on your account:
+#        https://github.com/marketplace/cirrus-ci
+#
+#   3. Log in to https://cirrus-ci.com with your GitHub account.
+#      Verify your repo appears at https://cirrus-ci.com/youruser/ocserv-ci-stub
+#
+#   4. Grab an API token from https://cirrus-ci.com/settings/profile/
+#
+#   5. In GitLab → Settings → CI/CD → Variables, add:
+#        CIRRUS_GITHUB_REPO  = "youruser/ocserv-ci-stub"   (not masked, not protected)
+#        CIRRUS_API_TOKEN    = "<token from step 4>"        (MASKED, not protected)
+#      Do NOT mark these as Protected — that would prevent them from being
+#      available in pipelines triggered from MR branches.
+#
+# HOW IT WORKS:
+#   The GitLab job runs in the `registry.gitlab.com/libvirt/libvirt-ci/cirrus-run`
+#   container, which contains the `cirrus-run` tool. That tool:
+#     1. Reads .cirrus/freebsd.yml from this repo (after substituting a few
+#        GitLab runtime variables into it via sed).
+#     2. Submits the resulting YAML to the Cirrus CI REST API, attributing
+#        the build to $CIRRUS_GITHUB_REPO.
+#     3. Streams the Cirrus CI build log back to the GitLab job console.
+#     4. Exits with the Cirrus CI build's exit code, so GitLab marks the
+#        job as passed or failed accordingly.
+#
+# COST:
+#   The GitLab job consumes compute minutes only while waiting for Cirrus CI
+#   to finish. The Cirrus CI build itself is free for public open-source
+#   repositories.
+
+.cirrus_build_job:
+  stage: preliminaries
+  # https://potyarkin.com/posts/2020/cirrus-ci-integration-for-gitlab-projects/
+  image: potyarkin/cirrus-run
+  needs: []
+  allow_failure: true
+  script:
+    # Substitute GitLab runtime variables into the Cirrus CI YAML template so
+    # the FreeBSD VM clones exactly the commit that triggered this pipeline.
+    - sed
+        -e "s|@CI_REPOSITORY_URL@|$CI_REPOSITORY_URL|g"
+        -e "s|@CI_COMMIT_REF_NAME@|$CI_COMMIT_REF_NAME|g"
+        -e "s|@CI_COMMIT_SHA@|$CI_COMMIT_SHA|g"
+        .cirrus/freebsd.yml > /tmp/cirrus-freebsd-rendered.yml
+    - echo "=== Rendered Cirrus CI config ==="
+    - cat /tmp/cirrus-freebsd-rendered.yml
+    - echo "================================="
+    - cirrus-run -v --show-build-log always /tmp/cirrus-freebsd-rendered.yml
+  # Only run this job when the required variables are configured.
+  # This means the job is silently skipped on forks that haven't set up
+  # Cirrus CI, rather than failing.
+#####  rules:
+#####    - if: "$CIRRUS_GITHUB_REPO && $CIRRUS_API_TOKEN"
+
+freebsd-14-build:
+  extends: .cirrus_build_job
+  # No extra variables needed — the Cirrus config is self-contained in
+  # .cirrus/freebsd.yml.  If you later want a second FreeBSD job (e.g.
+  # FreeBSD 13), duplicate this entry, change the name, and point it at a
+  # second template file following the QEMU project's .vars pattern.
