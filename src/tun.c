@@ -523,20 +523,21 @@ static int os_open_tun(main_server_st *s, struct proc_st *proc)
 	int fd, e, ret;
 	int sock;
 	struct ifreq ifr;
-	int unit_nr = 0;
+	unsigned int unit_nr = 0;
 	struct stat st;
 
 	fd = open("/dev/tun", O_RDWR);
 	if (fd == -1) {
 		/* try iterating */
+		const unsigned int max_clients =
+			GETRCONFIG(s)->max_clients > 0 ?
+				GETRCONFIG(s)->max_clients :
+				8192;
 		e = errno;
 		mslog(s, NULL, LOG_DEBUG,
 		      "cannot open /dev/tun; falling back to iteration: %s",
 		      strerror(e));
-		for (unit_nr = 0; GETRCONFIG(s)->max_clients > 0 ?
-					  GETRCONFIG(s)->max_clients :
-					  8192;
-		     unit_nr++) {
+		for (unit_nr = 0; unit_nr < max_clients; unit_nr++) {
 			snprintf(proc->tun_lease.name,
 				 sizeof(proc->tun_lease.name), "/dev/tun%d",
 				 unit_nr);
@@ -573,7 +574,7 @@ static int os_open_tun(main_server_st *s, struct proc_st *proc)
 	/* OpenBSD's devname does not return the correct name if unit_nr>=4.
 	 * See https://gitlab.com/openconnect/ocserv/-/issues/399
 	 */
-	snprintf(proc->tun_lease.name, sizeof(proc->tun_lease.name), "tun%d",
+	snprintf(proc->tun_lease.name, sizeof(proc->tun_lease.name), "tun%u",
 		 unit_nr);
 #else
 	/* get tun name */
