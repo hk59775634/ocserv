@@ -360,6 +360,7 @@ int response_401(worker_st *ws, unsigned int http_ver, char *realm);
 int get_empty_handler(worker_st *server, unsigned int http_ver);
 #ifdef ANYCONNECT_CLIENT_COMPAT
 int get_config_handler(worker_st *ws, unsigned int http_ver);
+int get_platform_handler(worker_st *ws, unsigned int http_ver);
 #endif
 int get_string_handler(worker_st *ws, unsigned int http_ver);
 int get_dl_handler(worker_st *ws, unsigned int http_ver);

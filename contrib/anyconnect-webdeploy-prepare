@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+#
+# Prepare unpacked Cisco AnyConnect/Secure Client webdeploy files for ocserv.
+
+set -euo pipefail
+
+usage()
+{
+	cat <<EOF
+Usage: $0 CHROOT_DIR [PACKAGE...]
+
+Extract Cisco AnyConnect/Secure Client webdeploy packages into:
+
+  CHROOT_DIR/1/webdeploy/<package-name>/
+
+If PACKAGE is omitted, all webdeploy packages under CHROOT_DIR/1/binaries are
+prepared. After preparation, ocserv can discover updates from 1/webdeploy, so
+the original package and extracted payload files do not have to remain in
+1/binaries unless they are used for the legacy non-unpacked fallback mode.
+EOF
+}
+
+die()
+{
+	echo "$0: $*" >&2
+	exit 1
+}
+
+need_cmd()
+{
+	command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
+}
+
+safe_zip_name()
+{
+	case "$1" in
+		"" | /* | *"/../"* | ../* | *"/.." | *".."*"/"*)
+			return 1
+			;;
+	esac
+
+	return 0
+}
+
+extract_if_present()
+{
+	local package=$1
+	local entry=$2
+	local dest=$3
+
+	if unzip -Z1 "$package" "$entry" >/dev/null 2>&1; then
+		safe_zip_name "$entry" || die "unsafe zip entry: $entry"
+		unzip -oq "$package" "$entry" -d "$dest"
+	fi
+}
+
+manifest_uris()
+{
+	local manifest=$1
+
+	test -f "$manifest" || return 0
+	sed -n 's:.*<uri>\([^<][^<]*\)</uri>.*:\1:p' "$manifest" |
+		while IFS= read -r uri; do
+			safe_zip_name "$uri" || die "unsafe manifest URI: $uri"
+			printf '%s\n' "$uri"
+		done
+}
+
+prepare_package()
+{
+	local chroot_dir=$1
+	local package=$2
+	local package_name
+	local package_dir
+	local work_dir
+	local uri
+
+	test -f "$package" || die "package not found: $package"
+
+	package_name=$(basename "$package")
+	package_dir="$chroot_dir/1/webdeploy/$package_name"
+
+	mkdir -p "$package_dir"
+
+	work_dir=$(mktemp -d "${TMPDIR:-/tmp}/ocserv-webdeploy.XXXXXX")
+	trap 'rm -rf "$work_dir"' RETURN
+
+	extract_if_present "$package" VPNManifest.xml "$work_dir"
+	extract_if_present "$package" VPNHashManifest.xml "$work_dir"
+	extract_if_present "$package" binaries/update.txt "$work_dir"
+	extract_if_present "$package" binaries/vpndownloader.sh "$work_dir"
+	extract_if_present "$package" binaries/vpndownloader.exe "$work_dir"
+	extract_if_present "$package" Darwin_i386 "$work_dir"
+	extract_if_present "$package" Windows "$work_dir"
+	extract_if_present "$package" Windows_ARM64 "$work_dir"
+	extract_if_present "$package" Linux "$work_dir"
+	extract_if_present "$package" Linux_64 "$work_dir"
+	extract_if_present "$package" Linux_ARM64 "$work_dir"
+
+	{
+		manifest_uris "$work_dir/VPNManifest.xml"
+		manifest_uris "$work_dir/VPNHashManifest.xml"
+	} | while IFS= read -r uri; do
+		case "$uri" in
+			binaries/*)
+				extract_if_present "$package" "$uri" "$work_dir"
+				;;
+		esac
+	done
+
+	if test ! -f "$work_dir/VPNManifest.xml"; then
+		echo "skipping unpacked metadata for $package_name: VPNManifest.xml not found" >&2
+		rm -rf "$package_dir"
+		return 0
+	fi
+
+	if test ! -f "$work_dir/binaries/vpndownloader.sh" &&
+	   test ! -f "$work_dir/binaries/vpndownloader.exe"; then
+		echo "skipping unpacked metadata for $package_name: downloader not found" >&2
+		rm -rf "$package_dir"
+		return 0
+	fi
+
+	cp -R "$work_dir"/. "$package_dir"/
+
+	echo "prepared $package_name"
+}
+
+if test "$#" -lt 1; then
+	usage >&2
+	exit 1
+fi
+
+need_cmd unzip
+need_cmd sed
+need_cmd find
+
+chroot_dir=$1
+shift
+
+if test "$#" -eq 0; then
+	binaries_dir="$chroot_dir/1/binaries"
+	test -d "$binaries_dir" || die "binaries directory not found: $binaries_dir"
+
+	set -- "$binaries_dir"/*webdeploy* "$binaries_dir"/*web-deploy*
+fi
+
+for package in "$@"; do
+	test -e "$package" || continue
+	test -f "$package" || continue
+	prepare_package "$chroot_dir" "$package"
+done
