@@ -724,6 +724,8 @@ static char *generate_anyconnect_version(worker_st *ws)
 		talloc_free(pool);
 		return talloc_strdup(ws, VPN_VERSION);
 	}
+
+	txt = talloc_strdup(ws, VPN_VERSION);
 cleanup:
 	talloc_free(pool);
 	return txt;
