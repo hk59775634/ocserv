@@ -1,0 +1,73 @@
+#!/bin/sh
+#
+# Copyright (C) 2026 OpenConnect VPN project
+#
+# This file is part of ocserv.
+
+SERV="${SERV:-../src/ocserv}"
+srcdir=${srcdir:-.}
+NO_NEED_ROOT=1
+PIDFILE=test-anyconnect-updates.$$.pid
+MANIFEST=test-anyconnect-updates.$$.manifest
+EMPTY_MANIFEST=test-anyconnect-updates.$$.empty
+UPDATE_TXT=test-anyconnect-updates.$$.update
+EMPTY_UPDATE_TXT=test-anyconnect-updates.$$.empty-update
+DOWNLOAD=test-anyconnect-updates.$$.download
+
+. `dirname $0`/common.sh
+
+eval "${GETPORT}"
+
+echo "Testing AnyConnect update manifest generation... "
+
+update_config test1.config
+echo "udp-port = 0" >>${CONFIG}
+
+rm -rf 1
+mkdir -p 1/binaries
+printf "old" >1/binaries/anyconnect-win-4.10.00093-core-vpn-webdeploy-k9.pkg
+printf "new" >1/binaries/anyconnect-win-4.10.07062-core-vpn-webdeploy-k9.pkg
+printf "linux" >1/binaries/anyconnect-linux64-4.9.06037-core-vpn-webdeploy-k9.pkg
+printf "bad" >1/binaries/not-an-anyconnect-package.pkg
+
+launch_sr_server -d 1 -p ${PIDFILE} -f -c ${CONFIG} & PID=$!
+wait_server $PID
+
+( LD_PRELOAD=libsocket_wrapper.so curl --user-agent "Cisco AnyConnect VPN Agent for Windows" --silent --insecure https://$ADDRESS:$PORT/1/VPNManifest.xml --output $MANIFEST ) ||
+	fail $PID "manifest request failed"
+
+grep -q 'version="4.10.07062"' $MANIFEST || fail $PID "latest Windows version was not selected"
+grep -q 'anyconnect-win-4.10.07062-core-vpn-webdeploy-k9.pkg' $MANIFEST || fail $PID "latest Windows package is missing"
+grep -q 'anyconnect-win-4.10.00093-core-vpn-webdeploy-k9.pkg' $MANIFEST && fail $PID "old Windows package was advertised"
+grep -q 'anyconnect-linux64-4.9.06037-core-vpn-webdeploy-k9.pkg' $MANIFEST && fail $PID "package for another platform was advertised"
+
+( LD_PRELOAD=libsocket_wrapper.so curl --user-agent "Cisco AnyConnect VPN Agent for Windows" --silent --insecure https://$ADDRESS:$PORT/1/binaries/update.txt --output $UPDATE_TXT ) ||
+	fail $PID "update.txt request failed"
+
+grep -q '^4,10,07062$' $UPDATE_TXT || fail $PID "latest Windows version was not reported"
+
+( LD_PRELOAD=libsocket_wrapper.so curl --user-agent "AnyConnect-compatible OpenConnect" --silent --insecure https://$ADDRESS:$PORT/1/VPNManifest.xml --output $EMPTY_MANIFEST ) ||
+	fail $PID "OpenConnect manifest request failed"
+
+grep -q '<file ' $EMPTY_MANIFEST && fail $PID "non-Cisco compatible client received updates"
+
+( LD_PRELOAD=libsocket_wrapper.so curl --user-agent "AnyConnect-compatible OpenConnect" --silent --insecure https://$ADDRESS:$PORT/1/binaries/update.txt --output $EMPTY_UPDATE_TXT ) ||
+	fail $PID "OpenConnect update.txt request failed"
+
+grep -q '^0,0,0000$' $EMPTY_UPDATE_TXT || fail $PID "non-Cisco compatible client received update version"
+
+( LD_PRELOAD=libsocket_wrapper.so curl --user-agent "Cisco AnyConnect VPN Agent for Windows" --silent --insecure https://$ADDRESS:$PORT/1/binaries/anyconnect-win-4.10.07062-core-vpn-webdeploy-k9.pkg --output $DOWNLOAD ) ||
+	fail $PID "package download failed"
+
+grep -q '^new$' $DOWNLOAD || fail $PID "downloaded package contents mismatch"
+
+if ! test -f ${PIDFILE};then
+	fail $PID "Could not find pid file ${PIDFILE}"
+fi
+
+cleanup
+
+rm -rf 1
+rm -f "$MANIFEST" "$EMPTY_MANIFEST" "$UPDATE_TXT" "$EMPTY_UPDATE_TXT" "$DOWNLOAD"
+
+exit 0
