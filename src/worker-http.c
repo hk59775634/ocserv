@@ -73,6 +73,7 @@ static const struct known_urls_st known_urls[] = {
 	LL("/1/binaries/vpndownloader.sh", get_dl_handler, NULL),
 	LL("/1/VPNManifest.xml", get_string_handler, NULL),
 	LL("/1/binaries/update.txt", get_string_handler, NULL),
+	LL_DIR("/1/binaries", get_anyconnect_binary_handler, NULL),
 
 	LL("/+CSCOT+/translation-table", get_string_handler, NULL),
 	LL("/+CSCOT+/oem-customization", get_string_handler, NULL),

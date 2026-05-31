@@ -128,6 +128,10 @@ if have_cwrap
     'test-group-cert', 'test-fork', 'test-pass-svc', 'test-cert-svc',
   ]
 
+  if get_option('anyconnect-compat').enabled()
+    cwrap_scripts += ['test-anyconnect-updates']
+  endif
+
   if have_cwrap_all
     cwrap_scripts += ['test-vhost']
   endif

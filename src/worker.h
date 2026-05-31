@@ -363,6 +363,7 @@ int get_config_handler(worker_st *ws, unsigned int http_ver);
 #endif
 int get_string_handler(worker_st *ws, unsigned int http_ver);
 int get_dl_handler(worker_st *ws, unsigned int http_ver);
+int get_anyconnect_binary_handler(worker_st *ws, unsigned int http_ver);
 int get_cert_names(worker_st *ws, const gnutls_datum_t *raw);
 
 void set_resume_db_funcs(gnutls_session_t);
