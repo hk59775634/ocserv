@@ -67,6 +67,11 @@ server.
   * **-s, --syslog**:
     Log to syslog (default).
 
+  * **--syslog-facility**=_NAME_:
+    Set the syslog facility used when logging to syslog. _NAME_ must be one of:
+    `daemon` (default), `user`, `auth`, `authpriv`, `local0` … `local7`.
+    This option is also available as the configuration file key **syslog-facility**.
+
   * **--no-chdir**:
     Do not perform a chdir on daemonize.
 
