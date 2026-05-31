@@ -126,6 +126,7 @@ if have_cwrap
     'drain-server', 'drain-server-fail',
     'test-ignore-querystring-of-post',
     'test-group-cert', 'test-fork', 'test-pass-svc', 'test-cert-svc',
+    'test-secmod-kill',
   ]
 
   if have_cwrap_all

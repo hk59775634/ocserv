@@ -325,6 +325,11 @@ Every new feature or bug fix is incomplete without tests:
   more important of the two — write it first.
 - For **bug fixes**, write the test that reproduces the bug and confirm it fails *before*
   applying the fix. A test written after the fix cannot prove it is meaningful.
+- **Tests must be self-diagnosing.** A failure must be explainable from the test output
+  alone — no silent exit-code-only failures that require local reproduction to understand.
+  Shell tests must print what they were testing and why it failed (e.g. `echo "FAIL: expected
+  X, got Y"`). C unit tests must print the failing condition and relevant values before
+  returning non-zero. Reviewers will reject tests whose failures are opaque.
 - Register all new tests in `tests/meson.build`.
 
 ### Adding Configuration Options

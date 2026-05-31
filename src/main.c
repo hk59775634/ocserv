@@ -904,6 +904,7 @@ static void sec_mod_child_watcher_cb(struct ev_loop *loop, ev_child *w,
 
 	ev_child_stop(loop, w);
 	mslog(s, NULL, LOG_ERR, "ocserv-secmod died unexpectedly");
+	s->abnormal_exit = 1;
 	ev_feed_signal_event(loop, SIGTERM);
 }
 
@@ -1815,7 +1816,7 @@ int main(int argc, char *argv[])
 	talloc_free(s->main_pool);
 	closelog();
 
-	return 0;
+	return s->abnormal_exit ? EXIT_FAILURE : 0;
 }
 
 extern char **pam_auth_group_list;

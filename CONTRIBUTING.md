@@ -57,6 +57,12 @@ every new merge request prior to merging. There are no particular rules for
 the test targets, except for them being reliable and running in a reasonable
 time frame (~1 hour).
 
+Tests must be **self-diagnosing**: a failure must be understandable from CI
+log output alone, without requiring local reproduction. Shell tests must print
+what they were testing and why it failed (e.g. `echo "FAIL: expected X, got Y"`).
+C unit tests must print the failing condition and relevant values before
+returning non-zero. Silent tests that fail with only an exit code will not be accepted.
+
 
 ## Reviewing code
 
@@ -80,6 +86,7 @@ No review will begin before CI passes.
 - [ ] `ninja -C build` succeeds after each commit, not just at the final set
 - [ ] Every commit has `Signed-off-by: Your Name <email@example.com>`
 - [ ] Both a positive test (correct behavior) and a negative test (bad input rejected)
+- [ ] Tests are self-diagnosing: a CI failure is explainable from the log output alone
 - [ ] No new Linux-specific syscalls without `#ifdef __linux__` guard
 
 

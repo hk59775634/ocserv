@@ -317,6 +317,8 @@ typedef struct main_server_st {
 
 	struct if_address_st *if_addresses;
 	unsigned int if_addresses_count;
+
+	unsigned int abnormal_exit; /* set on unexpected child death */
 } main_server_st;
 
 void clear_lists(main_server_st *s);
