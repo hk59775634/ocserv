@@ -296,6 +296,7 @@ typedef struct worker_st {
 
 	char username[MAX_USERNAME_SIZE];
 	char groupname[MAX_GROUPNAME_SIZE];
+	unsigned int groupname_url_forced;
 
 	char cert_username[MAX_USERNAME_SIZE];
 	char **cert_groups;
@@ -363,6 +364,7 @@ int get_config_handler(worker_st *ws, unsigned int http_ver);
 #endif
 int get_string_handler(worker_st *ws, unsigned int http_ver);
 int get_dl_handler(worker_st *ws, unsigned int http_ver);
+int get_anyconnect_binary_handler(worker_st *ws, unsigned int http_ver);
 int get_cert_names(worker_st *ws, const gnutls_datum_t *raw);
 
 void set_resume_db_funcs(gnutls_session_t);

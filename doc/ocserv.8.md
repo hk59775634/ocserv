@@ -126,6 +126,34 @@ Options not specified within a virtual host, or within a per-user/group file,
 fall back to the global configuration value, or to the built-in default if
 not set globally.
 
+## ANYCONNECT CLIENT WEB-DEPLOY UPDATES
+When ocserv is built with AnyConnect client compatibility enabled, it can
+advertise web-deploy update packages to Cisco AnyConnect clients. Place the
+packages under the `1/binaries` directory inside `chroot-dir`. For example, when
+`chroot-dir = /var/lib/ocserv`, place a Windows package at:
+
+    /var/lib/ocserv/1/binaries/anyconnect-win-4.10.07062-core-vpn-webdeploy-k9.pkg
+
+No extra configuration option is required. Ocserv generates `/1/VPNManifest.xml`,
+`/VPNManifest.xml`, and `/1/binaries/update.txt` from the package files found in
+that directory, and serves the package itself from `/1/binaries/<filename>`.
+
+Package filenames must use one of these forms:
+
+    anyconnect-<platform>-<version>-<name-containing-webdeploy>.<extension>
+    cisco-secure-client-<platform>-<version>-<name-containing-webdeploy>.<extension>
+
+Supported platform tokens are `win`, `win64`, `win-arm64`, `macos`, `linux`, and
+`linux64`. Version components are compared numerically, so `4.10.07062` is newer
+than `4.10.00093`. Ocserv advertises only the newest package for the requesting
+client platform. If there is no matching package, it returns an empty manifest and
+does not offer an update.
+
+To avoid surprising non-Cisco compatible clients, ocserv only advertises these
+packages to Cisco AnyConnect user-agents. OpenConnect-compatible and other
+non-original clients continue to receive the empty compatibility manifest and
+`0,0,0000` update version.
+
 ## VIRTUAL HOSTS
 Ocserv supports virtual hosts, allowing a single instance to serve multiple
 domains with different configurations. This feature operates similarly to
