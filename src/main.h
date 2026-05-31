@@ -48,6 +48,7 @@
 
 extern int saved_argc;
 extern char **saved_argv;
+extern char saved_executable_path[_POSIX_PATH_MAX];
 
 extern struct ev_loop *main_loop;
 extern ev_timer maintenance_watcher;

@@ -41,6 +41,7 @@
 
 int saved_argc;
 char **saved_argv;
+char saved_executable_path[_POSIX_PATH_MAX];
 
 const char *_vhost_prefix(const char *name)
 {
@@ -91,6 +92,7 @@ const char *ps_status_to_str(int status, unsigned int cookie)
 			return "connected";
 	case PS_AUTH_INIT:
 	case PS_AUTH_CONT:
+	case PS_AUTH_PENDING:
 		return "authenticating";
 	case PS_AUTH_INACTIVE:
 		return "pre-auth";

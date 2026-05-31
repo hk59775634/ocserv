@@ -58,7 +58,8 @@ enum {
 	PS_AUTH_FAILED, /* tried authentication but failed */
 	PS_AUTH_INIT, /* worker has sent an auth init msg */
 	PS_AUTH_CONT, /* worker has sent an auth cont msg */
-	PS_AUTH_COMPLETED /* successful authentication */
+	PS_AUTH_COMPLETED, /* successful authentication */
+	PS_AUTH_PENDING /* authentication is waiting for an async backend */
 };
 
 /* IPC protocol commands */
