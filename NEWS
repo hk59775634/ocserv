@@ -1,4 +1,5 @@
 * Version 1.5.0 (unreleased)
+- Added `syslog-facility` option to log to specified syslog facility (#691)
 - Fixed worker hang when a client disappears silently (#638)
 - Removed the 'cgroup' configuration option (used for cgroups v1).
   Administrators should use systemd resource controls instead; see

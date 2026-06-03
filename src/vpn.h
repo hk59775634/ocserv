@@ -250,6 +250,7 @@ struct static_cfg_st {
 	unsigned int log_level; /* [scope: global (non-reloadable)] */
 	unsigned int log_stderr; /* [scope: global (non-reloadable)] */
 	unsigned int syslog; /* [scope: global (non-reloadable)] */
+	int syslog_facility; /* [scope: global (non-reloadable)] */
 
 	unsigned int pr_dumpable; /* [scope: global (non-reloadable)] */
 

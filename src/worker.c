@@ -163,13 +163,13 @@ int main(int argc, char *argv[])
 		if (GETSCONFIG(s)->log_stderr)
 			flags |= LOG_PERROR;
 #endif
-		openlog("ocserv", flags, LOG_DAEMON);
+		openlog("ocserv", flags, GETSCONFIG(s)->syslog_facility);
 		syslog_open = 1;
 	}
 
 #ifdef HAVE_LIBWRAP
-	allow_severity = LOG_DAEMON | LOG_INFO;
-	deny_severity = LOG_DAEMON | LOG_WARNING;
+	allow_severity = GETSCONFIG(s)->syslog_facility | LOG_INFO;
+	deny_severity = GETSCONFIG(s)->syslog_facility | LOG_WARNING;
 #endif
 
 #ifdef HAVE_GSSAPI

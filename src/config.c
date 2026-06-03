@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2023 Nikos Mavrogiannopoulos
+ * Copyright (C) 2013-2026 Nikos Mavrogiannopoulos
  * Copyright (C) 2014, 2015 Red Hat, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -61,6 +61,31 @@
 
 #define OLD_DEFAULT_CFG_FILE "/etc/ocserv.conf"
 #define DEFAULT_CFG_FILE "/etc/ocserv/ocserv.conf"
+
+static int parse_syslog_facility(const char *name)
+{
+	unsigned i;
+	static const struct {
+		const char *name;
+		int facility;
+	} table[] = {
+		{ "daemon", LOG_DAEMON },     { "user", LOG_USER },
+		{ "auth", LOG_AUTH },	      { "local0", LOG_LOCAL0 },
+		{ "local1", LOG_LOCAL1 },     { "local2", LOG_LOCAL2 },
+		{ "local3", LOG_LOCAL3 },     { "local4", LOG_LOCAL4 },
+		{ "local5", LOG_LOCAL5 },     { "local6", LOG_LOCAL6 },
+		{ "local7", LOG_LOCAL7 },
+#ifdef LOG_AUTHPRIV
+		{ "authpriv", LOG_AUTHPRIV },
+#endif
+	};
+
+	for (i = 0; i < ARRAY_SIZE(table); i++) {
+		if (strcasecmp(name, table[i].name) == 0)
+			return table[i].facility;
+	}
+	return -1;
+}
 
 static void print_version(void);
 
@@ -749,6 +774,7 @@ static void apply_default_conf(vhost_cfg_st *vhost, unsigned int reload)
 		vhost->static_config.stats_reset_time =
 			24 * 60 * 60 * 7; /* weekly */
 		vhost->static_config.log_level = DEFAULT_LOG_LEVEL;
+		vhost->static_config.syslog_facility = LOG_DAEMON;
 	}
 
 	vhost->static_config.occtl_socket_file = OCCTL_UNIX_SOCKET;
@@ -1119,6 +1145,14 @@ static int cfg_ini_handler(void *_ctx, const char *section, const char *name,
 		} else if (strcmp(name, "log-level") == 0) {
 			READ_NUMERIC(vhost->static_config.log_level);
 			global_log_prio = vhost->static_config.log_level;
+		} else if (strcmp(name, "syslog-facility") == 0) {
+			int facility = parse_syslog_facility(value);
+			if (facility < 0) {
+				oc_syslog(LOG_ERR,
+					  "unknown syslog facility: %s", value);
+				return 0;
+			}
+			vhost->static_config.syslog_facility = facility;
 		} else {
 			stage1_found = 0;
 		}
@@ -2182,13 +2216,21 @@ static void check_cfg(vhost_cfg_st *vhost, vhost_cfg_st *defvhost,
 }
 
 #define OPT_NO_CHDIR 1
+#define OPT_SYSLOG_FACILITY 2
 static const struct option long_options[] = {
-	{ "debug", 1, 0, 'd' },	     { "log-stderr", 0, 0, 'e' },
-	{ "syslog", 0, 0, 's' },     { "config", 1, 0, 'c' },
-	{ "pid-file", 1, 0, 'p' },   { "test-config", 0, 0, 't' },
-	{ "foreground", 0, 0, 'f' }, { "no-chdir", 0, 0, OPT_NO_CHDIR },
-	{ "help", 0, 0, 'h' },	     { "traceable", 0, 0, 'x' },
-	{ "version", 0, 0, 'v' },    { NULL, 0, 0, 0 }
+	{ "debug", 1, 0, 'd' },
+	{ "log-stderr", 0, 0, 'e' },
+	{ "syslog", 0, 0, 's' },
+	{ "config", 1, 0, 'c' },
+	{ "pid-file", 1, 0, 'p' },
+	{ "test-config", 0, 0, 't' },
+	{ "foreground", 0, 0, 'f' },
+	{ "no-chdir", 0, 0, OPT_NO_CHDIR },
+	{ "help", 0, 0, 'h' },
+	{ "traceable", 0, 0, 'x' },
+	{ "version", 0, 0, 'v' },
+	{ "syslog-facility", 1, 0, OPT_SYSLOG_FACILITY },
+	{ NULL, 0, 0, 0 }
 };
 
 static void usage(void)
@@ -2221,6 +2263,10 @@ static void usage(void)
 	fprintf(stderr, "   -e, --log-stderr           Log to stderr\n");
 	fprintf(stderr,
 		"   -s, --syslog               Log to syslog (default)\n");
+	fprintf(stderr,
+		"       --syslog-facility=name  Syslog facility to use (default: daemon)\n");
+	fprintf(stderr,
+		"               - name: daemon user auth authpriv local0..local7\n");
 	fprintf(stderr,
 		"   -h, --help                 Display extended usage information and exit\n\n");
 
@@ -2276,6 +2322,17 @@ int cmd_parser(void *pool, int argc, char **argv, struct list_head *head,
 		case OPT_NO_CHDIR:
 			vhost->static_config.no_chdir = 1;
 			break;
+		case OPT_SYSLOG_FACILITY: {
+			int fac = parse_syslog_facility(optarg);
+			if (fac < 0) {
+				fprintf(stderr,
+					ERRSTR "unknown syslog facility: %s\n",
+					optarg);
+				exit(EXIT_FAILURE);
+			}
+			vhost->static_config.syslog_facility = fac;
+			break;
+		}
 		case 'h':
 			usage();
 			exit(EXIT_SUCCESS);

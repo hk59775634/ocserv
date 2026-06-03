@@ -113,6 +113,14 @@ endforeach
 # --------------------------------------------------------------------------
 
 if have_cwrap
+  # syslog-shim: LD_PRELOAD library used by test-syslog-facility to intercept
+  # openlog(3) and record the facility argument without a real syslog daemon.
+  syslog_shim = shared_library('syslog-shim', 'syslog-shim.c',
+    dependencies: [meson.get_compiler('c').find_library('dl', required: false)],
+    install: false,
+  )
+  test_env.set('SYSLOG_SHIM', syslog_shim.full_path())
+
   cwrap_scripts = [
     'test-pass', 'test-pass-cert', 'test-pass-cert-rfc822name',
     'test-cert', 'test-group-pass', 'test-pass-group-cert',
@@ -126,7 +134,7 @@ if have_cwrap
     'drain-server', 'drain-server-fail',
     'test-ignore-querystring-of-post',
     'test-group-cert', 'test-fork', 'test-pass-svc', 'test-cert-svc',
-    'test-secmod-kill',
+    'test-secmod-kill', 'test-syslog-facility',
   ]
 
   if have_cwrap_all
