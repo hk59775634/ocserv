@@ -32,13 +32,13 @@
 #include <radcli/radcli.h>
 #endif
 
-struct radius_vhost_ctx_st {
+typedef struct radius_vhost_ctx_st {
 	rc_handle *rh;
 	char nas_identifier[64];
 	char group_separator[2]; /* separator used in OU= Class attributes */
-};
+} radius_vhost_ctx_st;
 
-struct radius_ctx_st {
+typedef struct radius_ctx_st {
 	char username[MAX_USERNAME_SIZE * 2];
 	char user_agent[MAX_AGENT_NAME];
 
@@ -77,7 +77,7 @@ struct radius_ctx_st {
 	unsigned int state_len;
 	unsigned int passwd_counter;
 	size_t prev_prompt_hash;
-};
+} radius_ctx_st;
 
 extern const struct auth_mod_st radius_auth_funcs;
 
