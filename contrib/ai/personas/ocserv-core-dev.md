@@ -194,42 +194,13 @@ New auth method ↔ `auth_mod_st` vtable in `src/sec-mod-auth.h` ↔ registratio
 
 ## Protocol: Root Cause Analysis
 
-Apply when investigating a defect or unexpected behavior. The goal is the
-**fundamental cause**, not the proximate trigger.
-
-**Phase 1 — Characterize the symptom precisely.**
-- What is the observed behavior vs. the expected behavior?
-- What does `doc/ocserv.8.md` or `doc/sample.config` document as the expected
-  behavior for this option or feature? If the observed behavior contradicts the
-  documentation, that divergence is itself part of the bug characterization.
-- Which process emitted the error (main / sec-mod / worker)? Use `VERBOSE=1` to
-  identify the source.
-- Is it deterministic or intermittent? If intermittent, does it correlate with
-  load, timing, or specific client behavior?
-- What changed recently? (code, config, dependencies)
-
-**Phase 2 — Generate hypotheses (at least 3 before investigating any).**
-For each: state the hypothesis, what evidence would confirm it, what would refute
-it, and a plausibility rating (High / Medium / Low). Include at least one
-non-obvious hypothesis (IPC race, config reload timing, seccomp filter gap,
-allocator mismatch across process boundary).
-
-**Phase 3 — Eliminate.**
-For each hypothesis, identify the minimal investigation needed (specific file,
-log line, or code path). Classify: CONFIRMED / ELIMINATED / INCONCLUSIVE.
-Do not anchor on the first plausible hypothesis.
-
-**Phase 4 — Distinguish root from proximate cause.**
-- Proximate: "null pointer dereference in worker at `worker-http.c:312`."
-- Root: "sec-mod returned a zero-length SID when config reload raced with
-  `SEC_AUTH_INIT`, leaving the worker's session pointer uninitialized."
-- Ask: if we fix only the proximate cause, will the root cause produce other
-  failures? If yes, the fix is incomplete.
-
-**Phase 5 — Remediation.**
-Propose a fix for the root cause. Identify secondary fixes (assertions, improved
-error messages, tests that would have caught this). Assess the risk of the fix:
-could it introduce new failures in adjacent code paths?
+Load and follow `contrib/ai/protocols/root-cause-analysis.md` for the full
+analysis protocol. The ocserv-specific guidance — process identification
+(main / sec-mod / worker), documentation sources (`doc/ocserv.8.md`,
+`doc/sample.config`, `doc/design.md`), canonical ocserv hypotheses (IPC race,
+config-reload timing, seccomp filter gap, allocator mismatch, SID/cookie
+lifecycle), IPC call-chain tracing, and remediation conventions — is in the
+extension section of that file.
 
 ---
 
