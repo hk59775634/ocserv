@@ -1,0 +1,164 @@
+#!/bin/bash
+#
+# Copyright (C) 2026 OpenConnect VPN project
+#
+# This file is part of ocserv.
+#
+# ocserv is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at
+# your option) any later version.
+#
+# ocserv is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+SERV="${SERV:-../src/ocserv}"
+srcdir=${srcdir:-.}
+PIDFILE=ocserv-pid.$$.tmp
+PATH=${PATH}:/usr/sbin
+IP=$(command -v ip)
+RADIUSLOG=radius-async-helper.$$.radius.log
+OCSERVLOG=radius-async-helper.$$.ocserv.log
+RADIUSD=$(command -v radiusd)
+RADIUS_TMP_DB=
+
+if test -z "${RADIUSD}";then
+	RADIUSD=$(command -v freeradius)
+fi
+
+. `dirname $0`/common.sh
+
+eval "${GETPORT}"
+
+if test -z "${IP}";then
+	echo "no IP tool is present"
+	exit 77
+fi
+
+if test -z "${RADIUSD}";then
+	echo "no radiusd is present"
+	exit 77
+fi
+
+if test "$(id -u)" != "0";then
+	echo "This test must be run as root"
+	exit 77
+fi
+
+if ! VERSION_OUT=$(${SERV} -v 2>&1);then
+	echo "ocserv -v failed" >&2
+	echo "${VERSION_OUT}" >&2
+	exit 1
+fi
+
+echo "${VERSION_OUT}" | grep -q "OpenConnect VPN Server"
+if test $? != 0;then
+	echo "unexpected ocserv -v output" >&2
+	echo "${VERSION_OUT}" >&2
+	exit 1
+fi
+
+echo "Testing ocserv and radius async helper delegation... "
+
+finish() {
+	ret=$?
+	echo " * Cleaning up..."
+	cleanup_client_server
+	test -n "${RADIUSPID}" && kill ${RADIUSPID} >/dev/null 2>&1
+	if test "${ret}" = "0";then
+		test -f "${RADIUSLOG}" && rm -f "${RADIUSLOG}"
+		test -f "${OCSERVLOG}" && rm -f "${OCSERVLOG}"
+	else
+		test -f "${OCSERVLOG}" && cat "${OCSERVLOG}" >&2
+		test -f "${RADIUSLOG}" && cat "${RADIUSLOG}" >&2
+	fi
+	test -n "${RADIUS_TMP_DB}" && rm -rf "${RADIUS_TMP_DB}"
+	trap - EXIT
+	exit "${ret}"
+}
+trap finish EXIT
+
+OCCTL_SOCKET=./occtl-radius-async-$$.socket
+USERNAME=test1-otp
+
+. `dirname $0`/random-net.sh
+. `dirname $0`/ns.sh
+
+${CMDNS2} ${IP} link set dev lo up
+
+# freeradius refuses configuration dirs that are writable by non-root.
+# Use /root as parent to avoid world-writable path components like /tmp.
+RADIUS_TMP_DB=$(mktemp -d /root/raddb-radius-async.XXXXXX)
+chmod 700 "${RADIUS_TMP_DB}"
+cp -r "${RADDB_DIR}/." "${RADIUS_TMP_DB}/"
+chmod -R go-w "${RADIUS_TMP_DB}"
+
+# Run servers.
+${CMDNS2} ${RADIUSD} -d ${RADIUS_TMP_DB}/ -s -xx -l ${RADIUSLOG} &
+RADIUSPID=$!
+
+update_config radius-otp.config
+DEBUG="-d 3"
+
+${CMDNS2} ${SERV} -p ${PIDFILE} -f -c ${CONFIG} ${DEBUG} >${OCSERVLOG} 2>&1 &
+PID=$!
+
+sleep 3
+if ! kill -0 ${RADIUSPID} >/dev/null 2>&1;then
+	test -f "${RADIUSLOG}" && cat "${RADIUSLOG}" >&2
+	fail $PID "radiusd failed to start"
+fi
+
+for _TRY in $(seq 1 30); do
+	if ${CMDNS2} ss -tlnp 2>/dev/null | grep -q ":${PORT}";then
+		break
+	fi
+	sleep 1
+done
+
+if ! ${CMDNS2} ss -tlnp 2>/dev/null | grep -q ":${PORT}";then
+	test -f "${OCSERVLOG}" && cat "${OCSERVLOG}" >&2
+	test -f "${RADIUSLOG}" && cat "${RADIUSLOG}" >&2
+	fail $PID "ocserv port ${PORT} did not become ready"
+fi
+
+echo " * Authenticating via RADIUS challenge flow..."
+( { echo "$USERNAME-stage"
+for (( COUNT=1; COUNT <= 3; COUNT++ )); do
+	sleep 0.5
+	echo "$USERNAME-stage$COUNT"
+done
+} | ${CMDNS1} ${OPENCONNECT} ${ADDRESS}:${PORT} -u ${USERNAME} \
+	--servercert=pin-sha256:xp3scfzy3rOQsv9NcOve/8YVVv+pHr4qNCXEXrNl5s8= \
+	--cookieonly >/dev/null 2>&1 )
+if test $? != 0;then
+	test -f "${OCSERVLOG}" && cat "${OCSERVLOG}" >&2
+	test -f "${RADIUSLOG}" && cat "${RADIUSLOG}" >&2
+	fail $PID "OTP authentication failed"
+fi
+
+sleep 2
+
+DELEGATIONS=$(grep -c "delegated to helper pid" "${OCSERVLOG}" || true)
+if test "${DELEGATIONS}" -lt 1;then
+	cat "${OCSERVLOG}" >&2
+	fail $PID "no helper delegation was logged"
+fi
+
+if grep -q "cannot read radius auth helper result" "${OCSERVLOG}";then
+	cat "${OCSERVLOG}" >&2
+	fail $PID "helper result read failure detected"
+fi
+
+if grep -q "radius auth helper timed out" "${OCSERVLOG}";then
+	cat "${OCSERVLOG}" >&2
+	fail $PID "unexpected helper timeout detected"
+fi
+
+exit 0

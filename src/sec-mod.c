@@ -690,12 +690,77 @@ static void reload_server(sec_mod_st *sec)
 	need_reload = 0;
 }
 
+static void cleanup_pending_auth_job(sec_mod_st *sec, pending_auth_job_st *job,
+				     unsigned int terminate_helper)
+{
+	int status;
+	pid_t ret;
+
+	if (terminate_helper)
+		kill(job->helper_pid, SIGTERM);
+
+	close(job->helper_fd);
+	close(job->worker_fd);
+
+	do {
+		ret = waitpid(job->helper_pid, &status,
+			      terminate_helper ? 0 : WNOHANG);
+	} while (ret == -1 && errno == EINTR);
+
+	if (!terminate_helper && ret == 0) {
+		kill(job->helper_pid, SIGTERM);
+		do {
+			ret = waitpid(job->helper_pid, NULL, 0);
+		} while (ret == -1 && errno == EINTR);
+	}
+
+	list_del(&job->list);
+	if (sec->pending_auth_jobs_count > 0)
+		sec->pending_auth_jobs_count--;
+	talloc_free(job);
+}
+
+static void cleanup_timed_out_pending_auth_jobs(sec_mod_st *sec, time_t now)
+{
+	pending_auth_job_st *job;
+	pending_auth_job_st *job_tmp;
+	client_entry_st *e;
+	unsigned int auth_timeout;
+
+	list_for_each_safe(&sec->pending_auth_jobs, job, job_tmp, list)
+	{
+		e = find_client_entry(sec, job->sid);
+		if (e == NULL) {
+			cleanup_pending_auth_job(sec, job, 1);
+			continue;
+		}
+
+		auth_timeout = e->vhost->config->auth_timeout;
+		if (auth_timeout == 0)
+			continue;
+
+		if (now - job->started >= auth_timeout) {
+			handle_sec_auth_pending_timeout(sec, job);
+			cleanup_pending_auth_job(sec, job, 1);
+		}
+	}
+}
+
 static void check_other_work(sec_mod_st *sec)
 {
 	vhost_cfg_st *vhost = NULL;
+	time_t now = time(NULL);
 
 	if (need_exit) {
 		unsigned int i;
+		pending_auth_job_st *job;
+		pending_auth_job_st *job_tmp;
+
+		list_for_each_safe(&sec->pending_auth_jobs, job, job_tmp, list)
+		{
+			cleanup_pending_auth_job(sec, job, 1);
+		}
+		sec->pending_auth_jobs_count = 0;
 
 		list_for_each(sec->vconfig, vhost, list)
 		{
@@ -716,6 +781,9 @@ static void check_other_work(sec_mod_st *sec)
 	if (need_reload) {
 		reload_server(sec);
 	}
+
+	if (!list_empty(&sec->pending_auth_jobs))
+		cleanup_timed_out_pending_auth_jobs(sec, now);
 
 	if (need_maintenance) {
 		seclog(sec, LOG_DEBUG, "performing maintenance");
@@ -994,6 +1062,8 @@ void sec_mod_server(void *main_pool, void *config_pool,
 	vhost_cfg_st *vhost = NULL;
 	fd_set rd_set;
 	pid_t pid;
+	pending_auth_job_st *job;
+	pending_auth_job_st *job_tmp;
 #ifdef HAVE_PSELECT
 	struct timespec ts;
 #else
@@ -1026,6 +1096,7 @@ void sec_mod_server(void *main_pool, void *config_pool,
 	sec->vconfig = vconfig;
 	sec->config_pool = config_pool;
 	sec->sec_mod_pool = sec_mod_pool;
+	list_head_init(&sec->pending_auth_jobs);
 	memcpy((uint8_t *)sec->hmac_key, hmac_key, hmac_key_length);
 	sec->sec_mod_instance_id = instance_id;
 
@@ -1118,13 +1189,19 @@ void sec_mod_server(void *main_pool, void *config_pool,
 		FD_SET(sd, &rd_set);
 		n = MAX(n, sd);
 
+		list_for_each(&sec->pending_auth_jobs, job, list)
+		{
+			FD_SET(job->helper_fd, &rd_set);
+			n = MAX(n, job->helper_fd);
+		}
+
 #ifdef HAVE_PSELECT
 		ts.tv_nsec = 0;
-		ts.tv_sec = 120;
+		ts.tv_sec = list_empty(&sec->pending_auth_jobs) ? 120 : 1;
 		ret = pselect(n + 1, &rd_set, NULL, NULL, &ts, &emptyset);
 #else
 		ts.tv_usec = 0;
-		ts.tv_sec = 120;
+		ts.tv_sec = list_empty(&sec->pending_auth_jobs) ? 120 : 1;
 		sigprocmask(SIG_UNBLOCK, &blockset, NULL);
 		ret = select(n + 1, &rd_set, NULL, NULL, &ts);
 		sigprocmask(SIG_BLOCK, &blockset, NULL);
@@ -1171,6 +1248,18 @@ void sec_mod_server(void *main_pool, void *config_pool,
 			}
 		}
 
+		list_for_each_safe(&sec->pending_auth_jobs, job, job_tmp, list)
+		{
+			if (FD_ISSET(job->helper_fd, &rd_set)) {
+				ret = handle_sec_auth_pending_job(sec, job);
+				if (ret < 0) {
+					seclog(sec, LOG_DEBUG,
+					       "error processing pending radius auth job");
+				}
+				cleanup_pending_auth_job(sec, job, 0);
+			}
+		}
+
 		if (FD_ISSET(sd, &rd_set)) {
 			sa_len = sizeof(sa);
 			cfd = accept(sd, (struct sockaddr *)&sa, &sa_len);
@@ -1180,8 +1269,8 @@ void sec_mod_server(void *main_pool, void *config_pool,
 					seclog(sec, LOG_DEBUG,
 					       "sec-mod error accepting connection: %s",
 					       strerror(e));
-					goto cont;
 				}
+				goto cont;
 			}
 			set_cloexec_flag(cfd, 1);
 
@@ -1196,10 +1285,13 @@ void sec_mod_server(void *main_pool, void *config_pool,
 				       "rejected unauthorized connection");
 			} else {
 				memset(buffer, 0, buffer_size);
-				serve_request_worker(sec, cfd, pid, buffer,
-						     buffer_size);
+				ret = serve_request_worker(sec, cfd, pid, buffer,
+							   buffer_size);
+				if (ret == SEC_AUTH_PENDING)
+					cfd = -1;
 			}
-			close(cfd);
+			if (cfd != -1)
+				close(cfd);
 		}
 cont:
 		talloc_free(buffer);
