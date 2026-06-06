@@ -469,26 +469,6 @@ codingstyle/Fedora:
   - tags
   - schedules
 
-.FreeBSD:
-  stage: testing
-  script:
-  - git submodule update --init
-  - meson setup build -Droot-tests=false
-  - ninja -C build -j$JOBS
-  - meson test -C build --num-processes $JOBS --no-rebuild
-  tags:
-  - freebsd
-  only:
-  - branches@openconnect/ocserv
-  except:
-  - tags
-  - schedules
-  artifacts:
-    expire_in: 1 week
-    when: on_failure
-    paths:
-      - build/meson-logs/
-
 pages:
   stage: deploy
   image: $CI_REGISTRY/$BUILD_IMAGES_PROJECT:$FEDORA_BUILD
@@ -528,3 +508,6 @@ codespell/Fedora:
   except:
   - tags
   - schedules
+
+include:
+  - local: '/.gitlab-ci.d/cirrus/freebsd.yml'

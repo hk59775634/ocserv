@@ -1,0 +1,66 @@
+# Cirrus CI task definition for building ocserv on FreeBSD.
+#
+# This file is used by .gitlab-ci.d/cirrus/freebsd.yml via cirrus-run.
+# The three @PLACEHOLDER@ tokens are substituted at runtime by sed in
+# the GitLab CI job script before the file is sent to the Cirrus CI API.
+#
+# Notes on FreeBSD-specific package names vs Linux equivalents:
+#   libev-dev      libev
+#   libtalloc-dev  talloc
+#   liboath-dev    oath-toolkit  (provides liboath)
+#   radcli-dev     radcli
+#   libcurl-dev    curl
+#   protobuf-c     protobuf-c    (same)
+#   gperf/bison    gperf/bison   (same)
+#
+# Linux-only dependencies that are intentionally absent:
+#   libnl3     — Linux netlink API, not available on FreeBSD
+#   libseccomp — Linux-only syscall filter, not available on FreeBSD
+#
+# Meson option names: check your meson_options.txt (or run
+# `meson setup --help` in the source tree) for the exact spellings.
+# The -D flags below follow the most common convention; adjust if yours differ.
+
+freebsd_instance:
+  image_family: freebsd-14-4
+  cpu: 4
+  memory: 4G
+
+env:
+  CIRRUS_CLONE_DEPTH: 1
+  CI_REPOSITORY_URL: "@CI_REPOSITORY_URL@"
+  CI_COMMIT_REF_NAME: "@CI_COMMIT_REF_NAME@"
+  CI_COMMIT_SHA: "@CI_COMMIT_SHA@"
+
+build_task:
+  name: "FreeBSD 14 build"
+
+  install_script:
+    - pkg update -f
+    - pkg install -y
+        meson
+        ninja
+        pkgconf
+        gnutls
+        libev
+        protobuf-c
+        readline
+        talloc
+        oath-toolkit
+        radcli
+        curl
+        lz4
+        krb5
+        gperf
+        bison
+        git
+
+  clone_script:
+    - git clone --depth "$CIRRUS_CLONE_DEPTH" "$CI_REPOSITORY_URL" .
+    - git fetch origin "$CI_COMMIT_REF_NAME"
+    - git reset --hard "$CI_COMMIT_SHA"
+
+  build_script:
+    - meson setup build
+        || { cat build/meson-logs/meson-log.txt; exit 1; }
+    - meson compile -C build
