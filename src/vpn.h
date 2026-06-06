@@ -159,7 +159,7 @@ inline static const char *proto_to_str(fw_proto_t proto)
 #define MAX_CIPHERSUITE_NAME 64
 #define SID_SIZE 32
 
-struct vpn_st {
+typedef struct vpn_st {
 	char name[IFNAMSIZ];
 	char *ipv4_netmask;
 	char *ipv4_network;
@@ -185,7 +185,7 @@ struct vpn_st {
 
 	char **nbns;
 	size_t nbns_size;
-};
+} vpn_st;
 
 #define MAX_AUTH_METHODS 4
 
@@ -216,7 +216,7 @@ typedef struct acct_struct_st {
  * Note: reloadable fields (ReloadableConfig *config, usage_count, attic) live
  * directly in vhost_cfg_st, not here.
  */
-struct static_cfg_st {
+typedef struct static_cfg_st {
 	/* stuff here don't change on reload */
 	auth_struct_st
 		auth[MAX_AUTH_METHODS]; /* [scope: vhost (non-reloadable)] */
@@ -267,7 +267,7 @@ struct static_cfg_st {
 
 	/* for testing ocserv only */
 	unsigned int debug_no_secmod_stats; /* [scope: global (non-reloadable)] */
-};
+} static_cfg_st;
 
 typedef struct attic_entry_st {
 	struct list_node list;

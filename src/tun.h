@@ -25,11 +25,11 @@
 #include <string.h>
 #include <ccan/list/list.h>
 
-struct tun_lease_st {
+typedef struct tun_lease_st {
 	char name[IFNAMSIZ];
 
 	/* this is used temporarily. */
 	int fd;
-};
+} tun_lease_st;
 
 #endif
