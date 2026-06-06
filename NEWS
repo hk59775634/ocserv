@@ -11,6 +11,8 @@
 - Distinguish disconnect reasons in AnyConnect BYE packets (#732)
 - Vhosts now inherit configuration options from the default vhost if
   they are not overridden (#705)
+- Improved PAM handling by raising the provided stack memory to the default
+  for the system, and better detect overflow (#657)
 - `tunnel-all-dns` now works correctly when set in per-user/group config (#708)
 - radius: fixed Framed-IPv6-Prefix routes being silently dropped (#710)
 - Added per-worker memory limit (RLIMIT_DATA) as defense-in-depth against

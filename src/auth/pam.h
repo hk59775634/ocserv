@@ -29,6 +29,7 @@
 #include <security/pam_appl.h>
 #include <str.h>
 #include <pcl.h>
+#include "pam-stack.h"
 
 extern const struct auth_mod_st pam_auth_funcs;
 
@@ -38,11 +39,13 @@ struct pam_ctx_st {
 	pam_handle_t *ph;
 	struct pam_conv dc;
 	coroutine_t cr;
+	struct pam_stack_st cr_stack;
 	int cr_ret;
 	unsigned int changing; /* whether we are entering a new password */
 	str_st msg;
 	str_st prompt;
 	unsigned int sent_msg;
+	unsigned aborted; /* signal that the user session was aborted */
 	struct pam_response *replies; /* for safety */
 	unsigned int state; /* PAM_S_ */
 	unsigned int passwd_counter;

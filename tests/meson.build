@@ -79,6 +79,18 @@ config_inherit_exe = executable('config-inherit', 'config-inherit.c',
 test('config-inherit', config_inherit_exe,
   env: test_env, workdir: test_workdir, timeout: 30)
 
+# pam-guard-page: verifies that the PROT_NONE guard page beneath the PCL
+# coroutine stack converts a stack overflow into a crash (#619, #657).
+# Linux only; returns 77 (skip) on other platforms.
+if pam_dep.found()
+  pam_guard_page_exe = executable('pam-guard-page', 'pam-guard-page.c',
+    dependencies: test_base_deps + [pcl_dep],
+    include_directories: test_inc,
+  )
+  test('pam-guard-page', pam_guard_page_exe,
+    env: test_env, workdir: test_workdir, timeout: 30)
+endif
+
 # gen_oidc_test_data (only when OIDC enabled)
 if oidc_enabled
   gen_oidc_exe = executable('gen_oidc_test_data', 'generate_oidc_test_data.c',
@@ -161,13 +173,21 @@ if have_cwrap
   endforeach
 
   if have_cwrap_pam
+    # Detection module for the pam_auth_deinit coroutine-safety test (#657).
+    pam_abort_mod = shared_module('pam_abort_test', 'pam-abort-mod.c',
+      dependencies: [pam_dep],
+      name_prefix:  '',
+      install:      false,
+    )
+
     # Generate PAM test data files from templates into builddir/data/pam/
     # common.sh expects: ${builddir}/data/pam/{nss-passwd,nss-group,ocserv}
     pam_conf = configuration_data({
-      'ROOTUID':    run_command('id', '-u', check: true).stdout().strip(),
-      'ROOTGID':    run_command('id', '-g', check: true).stdout().strip(),
-      'PAMWRAPDIR': cwrap_pam_dep.get_variable(pkgconfig: 'modules',
-                                               default_value: '/usr/lib/pam_wrapper'),
+      'ROOTUID':       run_command('id', '-u', check: true).stdout().strip(),
+      'ROOTGID':       run_command('id', '-g', check: true).stdout().strip(),
+      'PAMWRAPDIR':    cwrap_pam_dep.get_variable(pkgconfig: 'modules',
+                                                  default_value: '/usr/lib/pam_wrapper'),
+      'PAM_ABORT_MOD': pam_abort_mod.full_path(),
     })
     subdir('data/pam')
 
@@ -178,6 +198,12 @@ if have_cwrap
         workdir: test_workdir,
       )
     endforeach
+
+    test('test-pam-abort', find_program('test-pam-abort'),
+      env:     test_env,
+      timeout: 90,
+      workdir: test_workdir,
+    )
 
     if get_option('kerberos-tests')
       test('kerberos', find_program('kerberos'),
