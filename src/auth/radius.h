@@ -74,6 +74,7 @@ struct radius_ctx_st {
 
 	struct radius_vhost_ctx *vctx;
 	char *state;
+	unsigned int state_len;
 	unsigned int passwd_counter;
 	size_t prev_prompt_hash;
 };

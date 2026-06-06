@@ -411,7 +411,7 @@ static int radius_auth_pass(void *ctx, const char *pass, unsigned int pass_len)
 
 	if (pctx->state != NULL) {
 		if (rc_avpair_add(pctx->vctx->rh, &send, PW_STATE, pctx->state,
-				  -1, 0) == NULL) {
+				  pctx->state_len, 0) == NULL) {
 			oc_syslog(
 				LOG_ERR,
 				"%s:%u: error in constructing radius message for user '%s'",
@@ -421,6 +421,7 @@ static int radius_auth_pass(void *ctx, const char *pass, unsigned int pass_len)
 		}
 		talloc_free(pctx->state);
 		pctx->state = NULL;
+		pctx->state_len = 0;
 	}
 
 	pctx->pass_msg[0] = 0;
@@ -593,15 +594,18 @@ static int radius_auth_pass(void *ctx, const char *pass, unsigned int pass_len)
 			if (vp->attribute == PW_STATE &&
 			    vp->type == PW_TYPE_STRING) {
 				/* State */
-				if (vp->lvalue > 0)
-					pctx->state = talloc_strdup(
-						pctx, vp->strvalue);
+				if (vp->lvalue > 0) {
+					pctx->state = talloc_memdup(
+						pctx, vp->strvalue, vp->lvalue);
+					pctx->state_len =
+						pctx->state ? vp->lvalue : 0;
+				}
 
 				pctx->id++;
 				oc_syslog(
 					LOG_DEBUG,
-					"radius-auth: Access-Challenge response stage %u, State %s",
-					pctx->passwd_counter, vp->strvalue);
+					"radius-auth: Access-Challenge response stage %u, State length %u",
+					pctx->passwd_counter, vp->lvalue);
 				ret = ERR_AUTH_CONTINUE;
 			}
 			vp = vp->next;
