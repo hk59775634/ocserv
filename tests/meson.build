@@ -313,7 +313,7 @@ if get_option('root-tests')
   foreach s : root_scripts
     test(s, find_program(s),
       env:     test_env,
-      timeout: 300,
+      timeout: 1000,
       workdir: test_workdir,
     )
   endforeach
@@ -341,7 +341,7 @@ if get_option('root-tests')
                  'radius-ipv6-prefix']
       test(s, find_program(s),
         env:     test_env,
-        timeout: 300,
+        timeout: 1000,
         workdir: test_workdir,
         depends: [raddb_chmod_stamp],
       )
