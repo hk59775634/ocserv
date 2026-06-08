@@ -73,6 +73,15 @@
 #endif
 
 #define MAX_CHALLENGES 16
+#define MAX_RADIUS_ASYNC_ROUTES 4096
+#define MAX_RADIUS_ASYNC_STRING 4096
+#define MAX_RADIUS_ASYNC_STATE 4096
+
+/* Per-blob read timeout for the helper socketpair. The full RADIUS
+ * round-trip happens inside the helper, then the result is written
+ * to the socket in one burst, so the only waits the parent should
+ * see here are scheduler hiccups. */
+#define RADIUS_HELPER_READ_TIMEOUT 5
 
 static void radius_vhost_init(void **_vctx, void *pool, void *additional)
 {
@@ -85,6 +94,9 @@ static void radius_vhost_init(void **_vctx, void *pool, void *additional)
 	vctx = talloc_zero(pool, struct radius_vhost_ctx);
 	if (vctx == NULL)
 		goto fail;
+
+	if (config->config)
+		strlcpy(vctx->config, config->config, sizeof(vctx->config));
 
 	vctx->rh = rc_read_config(config->config);
 	if (vctx->rh == NULL) {
@@ -241,18 +253,42 @@ static void append_route(struct radius_ctx_st *pctx, const char *route,
 	}
 }
 
+static int set_radius_state(struct radius_ctx_st *pctx, const VALUE_PAIR *vp)
+{
+	talloc_free(pctx->state);
+	pctx->state = NULL;
+	pctx->state_len = 0;
+
+	if (vp->lvalue == 0)
+		return 0;
+
+	pctx->state = talloc_memdup(pctx, vp->strvalue, vp->lvalue);
+	if (pctx->state == NULL)
+		return -1;
+
+	pctx->state_len = vp->lvalue;
+	return 0;
+}
+
 /* Parses group of format "OU=group1<sep>group2<sep>group3" */
-static void parse_groupnames(struct radius_ctx_st *pctx, char *full)
+static void parse_groupnames(struct radius_ctx_st *pctx, const char *full,
+			     unsigned int len)
 {
 	char *p, *p2;
 	const char *sep = pctx->vctx->group_separator;
+	char *orig;
+
+	p = talloc_strndup(pctx, full, len);
+	if (p == NULL)
+		return;
+	full = p;
 
 	if (pctx->groupnames_size >= MAX_GROUPS) {
 		oc_syslog(
 			LOG_WARNING,
 			"radius-auth: cannot handle more than %d groups, ignoring group string %s",
 			MAX_GROUPS, full);
-	} else if (strncmp(full, "OU=", 3) == 0) {
+	} else if (len >= 3 && memcmp(full, "OU=", 3) == 0) {
 		oc_syslog(LOG_DEBUG, "radius-auth: found group string %s",
 			  full);
 		full += 3;
@@ -260,12 +296,18 @@ static void parse_groupnames(struct radius_ctx_st *pctx, char *full)
 		p = talloc_strdup(pctx, full);
 		if (p == NULL)
 			return;
+		orig = p;
 
 		p2 = strsep(&p, sep);
 		while (p2 != NULL) {
-			pctx->groupnames[pctx->groupnames_size++] = p2;
+			char *gname = talloc_strdup(pctx, p2);
 
-			oc_syslog(LOG_DEBUG, "radius-auth: found group %s", p2);
+			if (gname == NULL)
+				break;
+			pctx->groupnames[pctx->groupnames_size++] = gname;
+
+			oc_syslog(LOG_DEBUG, "radius-auth: found group %s",
+				  gname);
 
 			p2 = strsep(&p, sep);
 
@@ -278,12 +320,10 @@ static void parse_groupnames(struct radius_ctx_st *pctx, char *full)
 				break;
 			}
 		}
+		talloc_free(orig);
 	} else {
 		oc_syslog(LOG_DEBUG, "radius-auth: found group string %s",
 			  full);
-		p = talloc_strdup(pctx, full);
-		if (p == NULL)
-			return;
 		pctx->groupnames[pctx->groupnames_size++] = p;
 	}
 }
@@ -445,7 +485,8 @@ static int radius_auth_pass(void *ctx, const char *pass, unsigned int pass_len)
 			} else if (vp->attribute == RAD_GROUP_NAME &&
 				   vp->type == PW_TYPE_STRING) {
 				/* Group-Name */
-				parse_groupnames(pctx, vp->strvalue);
+				parse_groupnames(pctx, vp->strvalue,
+						 vp->lvalue);
 			} else if (vp->attribute == PW_FRAMED_IPV6_ADDRESS &&
 				   vp->type == PW_TYPE_IPV6ADDR) {
 				/* Framed-IPv6-Address */
@@ -594,12 +635,8 @@ static int radius_auth_pass(void *ctx, const char *pass, unsigned int pass_len)
 			if (vp->attribute == PW_STATE &&
 			    vp->type == PW_TYPE_STRING) {
 				/* State */
-				if (vp->lvalue > 0) {
-					pctx->state = talloc_memdup(
-						pctx, vp->strvalue, vp->lvalue);
-					pctx->state_len =
-						pctx->state ? vp->lvalue : 0;
-				}
+				if (set_radius_state(pctx, vp) < 0)
+					goto fail;
 
 				pctx->id++;
 				oc_syslog(
@@ -650,6 +687,399 @@ cleanup:
 	return ret;
 }
 
+struct radius_async_result_hdr {
+	int32_t auth_ret;
+	uint32_t groupnames_size;
+	uint32_t routes_size;
+	uint32_t state_len;
+	uint32_t interim_interval_secs;
+	uint32_t session_timeout_secs;
+	uint32_t rx_per_sec;
+	uint32_t tx_per_sec;
+	uint32_t retries;
+	uint32_t id;
+	uint32_t passwd_counter;
+	uint64_t prev_prompt_hash;
+	uint16_t ipv6_subnet_prefix;
+	char pass_msg[PW_MAX_MSG_SIZE];
+	char ipv4[MAX_IP_STR];
+	char ipv4_mask[MAX_IP_STR];
+	char ipv4_dns1[MAX_IP_STR];
+	char ipv4_dns2[MAX_IP_STR];
+	char ipv6[MAX_IP_STR];
+	char ipv6_net[MAX_IP_STR];
+	char ipv6_dns1[MAX_IP_STR];
+	char ipv6_dns2[MAX_IP_STR];
+};
+
+struct radius_async_request_hdr {
+	uint32_t state_len;
+	uint32_t retries;
+	uint32_t id;
+	uint32_t passwd_counter;
+	uint64_t prev_prompt_hash;
+};
+
+static int write_blob(int fd, const void *data, size_t len)
+{
+	if (data == NULL && len > 0)
+		return -1;
+	if (len == 0)
+		return 0;
+	return force_write(fd, data, len) == (ssize_t)len ? 0 : -1;
+}
+
+static int read_blob(int fd, void *data, size_t len)
+{
+	if (data == NULL && len > 0)
+		return -1;
+	if (len == 0)
+		return 0;
+	return force_read_timeout(fd, data, len, RADIUS_HELPER_READ_TIMEOUT) ==
+			       (ssize_t)len ?
+		       0 :
+		       -1;
+}
+
+static int write_counted_data(int fd, const void *data, size_t len)
+{
+	uint32_t wire_len;
+
+	if (data == NULL && len > 0)
+		return -1;
+	if (len > UINT32_MAX)
+		return -1;
+
+	wire_len = (uint32_t)len;
+
+	if (write_blob(fd, &wire_len, sizeof(wire_len)) < 0)
+		return -1;
+	return write_blob(fd, data, len);
+}
+
+static int write_counted_string(int fd, const char *str)
+{
+	return write_counted_data(fd, str, str ? strlen(str) : 0);
+}
+
+static char *read_counted_string(void *pool, int fd, uint32_t max_len)
+{
+	uint32_t len;
+	char *str;
+
+	if (read_blob(fd, &len, sizeof(len)) < 0)
+		return NULL;
+	if (len > max_len)
+		return NULL;
+	if (len == 0)
+		return talloc_strdup(pool, "");
+
+	str = talloc_size(pool, (size_t)len + 1);
+	if (str == NULL)
+		return NULL;
+	if (read_blob(fd, str, len) < 0) {
+		talloc_free(str);
+		return NULL;
+	}
+	str[len] = 0;
+	return str;
+}
+
+static int radius_auth_pass_write_result(int fd, struct radius_ctx_st *pctx,
+					 int auth_ret)
+{
+	struct radius_async_result_hdr hdr;
+	unsigned int i;
+
+	memset(&hdr, 0, sizeof(hdr));
+
+	if (pctx->groupnames_size > MAX_GROUPS ||
+	    pctx->routes_size > MAX_RADIUS_ASYNC_ROUTES ||
+	    pctx->state_len > MAX_RADIUS_ASYNC_STATE)
+		return -1;
+
+	hdr.auth_ret = auth_ret;
+	hdr.groupnames_size = pctx->groupnames_size;
+	hdr.routes_size = pctx->routes_size;
+	hdr.state_len = (uint32_t)pctx->state_len;
+	hdr.interim_interval_secs = pctx->interim_interval_secs;
+	hdr.session_timeout_secs = pctx->session_timeout_secs;
+	hdr.rx_per_sec = pctx->rx_per_sec;
+	hdr.tx_per_sec = pctx->tx_per_sec;
+	hdr.retries = pctx->retries;
+	hdr.id = pctx->id;
+	hdr.passwd_counter = pctx->passwd_counter;
+	hdr.prev_prompt_hash = pctx->prev_prompt_hash;
+	hdr.ipv6_subnet_prefix = pctx->ipv6_subnet_prefix;
+	strlcpy(hdr.pass_msg, pctx->pass_msg, sizeof(hdr.pass_msg));
+	strlcpy(hdr.ipv4, pctx->ipv4, sizeof(hdr.ipv4));
+	strlcpy(hdr.ipv4_mask, pctx->ipv4_mask, sizeof(hdr.ipv4_mask));
+	strlcpy(hdr.ipv4_dns1, pctx->ipv4_dns1, sizeof(hdr.ipv4_dns1));
+	strlcpy(hdr.ipv4_dns2, pctx->ipv4_dns2, sizeof(hdr.ipv4_dns2));
+	strlcpy(hdr.ipv6, pctx->ipv6, sizeof(hdr.ipv6));
+	strlcpy(hdr.ipv6_net, pctx->ipv6_net, sizeof(hdr.ipv6_net));
+	strlcpy(hdr.ipv6_dns1, pctx->ipv6_dns1, sizeof(hdr.ipv6_dns1));
+	strlcpy(hdr.ipv6_dns2, pctx->ipv6_dns2, sizeof(hdr.ipv6_dns2));
+
+	if (write_blob(fd, &hdr, sizeof(hdr)) < 0)
+		return -1;
+	if (write_blob(fd, pctx->state, pctx->state_len) < 0)
+		return -1;
+
+	for (i = 0; i < pctx->groupnames_size; i++) {
+		if (pctx->groupnames[i] != NULL &&
+		    strlen(pctx->groupnames[i]) > MAX_GROUPNAME_SIZE)
+			return -1;
+		if (write_counted_string(fd, pctx->groupnames[i]) < 0)
+			return -1;
+	}
+
+	for (i = 0; i < pctx->routes_size; i++) {
+		if (pctx->routes[i] != NULL &&
+		    strlen(pctx->routes[i]) > MAX_RADIUS_ASYNC_STRING)
+			return -1;
+		if (write_counted_string(fd, pctx->routes[i]) < 0)
+			return -1;
+	}
+
+	return 0;
+}
+
+static void radius_ctx_clear_dynamic(struct radius_ctx_st *pctx)
+{
+	unsigned int i;
+
+	for (i = 0; i < pctx->groupnames_size; i++) {
+		talloc_free(pctx->groupnames[i]);
+		pctx->groupnames[i] = NULL;
+	}
+	pctx->groupnames_size = 0;
+
+	for (i = 0; i < pctx->routes_size; i++)
+		talloc_free(pctx->routes[i]);
+	talloc_free(pctx->routes);
+	pctx->routes = NULL;
+	pctx->routes_size = 0;
+
+	talloc_free(pctx->state);
+	pctx->state = NULL;
+	pctx->state_len = 0;
+}
+
+int radius_auth_is_async_candidate(const struct auth_mod_st *module)
+{
+	return module == &radius_auth_funcs;
+}
+
+int radius_auth_pass_async_send_request(void *ctx, const char *pass,
+					unsigned int pass_len, int fd)
+{
+	struct radius_ctx_st *pctx = ctx;
+	struct radius_async_request_hdr hdr;
+
+	if (pctx->state_len > MAX_RADIUS_ASYNC_STATE ||
+	    pass_len > MAX_RADIUS_ASYNC_STRING)
+		return -1;
+
+	memset(&hdr, 0, sizeof(hdr));
+	hdr.state_len = (uint32_t)pctx->state_len;
+	hdr.retries = pctx->retries;
+	hdr.id = pctx->id;
+	hdr.passwd_counter = pctx->passwd_counter;
+	hdr.prev_prompt_hash = pctx->prev_prompt_hash;
+
+	if (write_blob(fd, &hdr, sizeof(hdr)) < 0)
+		return -1;
+	if (write_counted_string(fd, pctx->vctx->config) < 0)
+		return -1;
+	if (write_counted_string(fd, pctx->vctx->nas_identifier) < 0)
+		return -1;
+	if (write_counted_string(fd, pctx->vctx->group_separator) < 0)
+		return -1;
+	if (write_counted_string(fd, pctx->username) < 0)
+		return -1;
+	if (write_counted_string(fd, pctx->remote_ip) < 0)
+		return -1;
+	if (write_counted_string(fd, pctx->our_ip) < 0)
+		return -1;
+	if (write_counted_string(fd, pctx->user_agent) < 0)
+		return -1;
+	if (write_counted_data(fd, pass, pass != NULL ? pass_len : 0) < 0)
+		return -1;
+	if (write_blob(fd, pctx->state, pctx->state_len) < 0)
+		return -1;
+
+	return 0;
+}
+
+int radius_auth_helper_main(int fd)
+{
+	void *pool;
+	struct radius_vhost_ctx *vctx;
+	struct radius_ctx_st *pctx;
+	struct radius_async_request_hdr hdr;
+	char *config;
+	char *nas_identifier;
+	char *group_separator;
+	char *password;
+	int ret;
+
+	pool = talloc_init("radius-auth-helper");
+	if (pool == NULL)
+		return EXIT_FAILURE;
+
+	vctx = talloc_zero(pool, struct radius_vhost_ctx);
+	pctx = talloc_zero(pool, struct radius_ctx_st);
+	if (vctx == NULL || pctx == NULL)
+		return EXIT_FAILURE;
+
+	if (read_blob(fd, &hdr, sizeof(hdr)) < 0)
+		return EXIT_FAILURE;
+	if (hdr.state_len > MAX_RADIUS_ASYNC_STATE)
+		return EXIT_FAILURE;
+
+	config = read_counted_string(pool, fd, _POSIX_PATH_MAX - 1);
+	nas_identifier =
+		read_counted_string(pool, fd, sizeof(vctx->nas_identifier) - 1);
+	group_separator = read_counted_string(
+		pool, fd, sizeof(vctx->group_separator) - 1);
+	if (config == NULL || nas_identifier == NULL || group_separator == NULL)
+		return EXIT_FAILURE;
+
+	strlcpy(vctx->config, config, sizeof(vctx->config));
+	strlcpy(vctx->nas_identifier, nas_identifier,
+		sizeof(vctx->nas_identifier));
+	if (group_separator[0] != 0)
+		strlcpy(vctx->group_separator, group_separator,
+			sizeof(vctx->group_separator));
+	else
+		strlcpy(vctx->group_separator, ";",
+			sizeof(vctx->group_separator));
+
+	pctx->vctx = vctx;
+	if ((pctx->vctx->rh = rc_read_config(vctx->config)) == NULL)
+		return EXIT_FAILURE;
+	if (rc_read_dictionary(pctx->vctx->rh,
+			       rc_conf_str(pctx->vctx->rh, "dictionary")) != 0)
+		return EXIT_FAILURE;
+
+	config = read_counted_string(pool, fd, sizeof(pctx->username) - 1);
+	if (config == NULL)
+		return EXIT_FAILURE;
+	strlcpy(pctx->username, config, sizeof(pctx->username));
+
+	config = read_counted_string(pool, fd, sizeof(pctx->remote_ip) - 1);
+	if (config == NULL)
+		return EXIT_FAILURE;
+	strlcpy(pctx->remote_ip, config, sizeof(pctx->remote_ip));
+
+	config = read_counted_string(pool, fd, sizeof(pctx->our_ip) - 1);
+	if (config == NULL)
+		return EXIT_FAILURE;
+	strlcpy(pctx->our_ip, config, sizeof(pctx->our_ip));
+
+	config = read_counted_string(pool, fd, sizeof(pctx->user_agent) - 1);
+	if (config == NULL)
+		return EXIT_FAILURE;
+	strlcpy(pctx->user_agent, config, sizeof(pctx->user_agent));
+
+	password = read_counted_string(pool, fd, MAX_RADIUS_ASYNC_STRING);
+	if (password == NULL)
+		return EXIT_FAILURE;
+
+	pctx->retries = hdr.retries;
+	pctx->id = hdr.id;
+	pctx->passwd_counter = hdr.passwd_counter;
+	pctx->prev_prompt_hash = hdr.prev_prompt_hash;
+
+	if (hdr.state_len > 0) {
+		pctx->state = talloc_size(pctx, hdr.state_len);
+		if (pctx->state == NULL)
+			return EXIT_FAILURE;
+		if (read_blob(fd, pctx->state, hdr.state_len) < 0)
+			return EXIT_FAILURE;
+		pctx->state_len = hdr.state_len;
+	}
+
+	ret = radius_auth_pass(pctx, password, (unsigned int)strlen(password));
+	if (radius_auth_pass_write_result(fd, pctx, ret) < 0)
+		return EXIT_FAILURE;
+
+	talloc_free(pool);
+	return EXIT_SUCCESS;
+}
+
+int radius_auth_pass_async_apply(void *ctx, int fd, int *auth_ret)
+{
+	struct radius_ctx_st *pctx = ctx;
+	struct radius_async_result_hdr hdr;
+	unsigned int i;
+
+	if (read_blob(fd, &hdr, sizeof(hdr)) < 0)
+		return -1;
+
+	if (hdr.state_len > MAX_RADIUS_ASYNC_STATE ||
+	    hdr.groupnames_size > MAX_GROUPS ||
+	    hdr.routes_size > MAX_RADIUS_ASYNC_ROUTES)
+		return -1;
+
+	radius_ctx_clear_dynamic(pctx);
+
+	pctx->interim_interval_secs = hdr.interim_interval_secs;
+	pctx->session_timeout_secs = hdr.session_timeout_secs;
+	pctx->rx_per_sec = hdr.rx_per_sec;
+	pctx->tx_per_sec = hdr.tx_per_sec;
+	pctx->retries = hdr.retries;
+	pctx->id = hdr.id;
+	pctx->passwd_counter = hdr.passwd_counter;
+	pctx->prev_prompt_hash = hdr.prev_prompt_hash;
+	pctx->ipv6_subnet_prefix = hdr.ipv6_subnet_prefix;
+	strlcpy(pctx->pass_msg, hdr.pass_msg, sizeof(pctx->pass_msg));
+	strlcpy(pctx->ipv4, hdr.ipv4, sizeof(pctx->ipv4));
+	strlcpy(pctx->ipv4_mask, hdr.ipv4_mask, sizeof(pctx->ipv4_mask));
+	strlcpy(pctx->ipv4_dns1, hdr.ipv4_dns1, sizeof(pctx->ipv4_dns1));
+	strlcpy(pctx->ipv4_dns2, hdr.ipv4_dns2, sizeof(pctx->ipv4_dns2));
+	strlcpy(pctx->ipv6, hdr.ipv6, sizeof(pctx->ipv6));
+	strlcpy(pctx->ipv6_net, hdr.ipv6_net, sizeof(pctx->ipv6_net));
+	strlcpy(pctx->ipv6_dns1, hdr.ipv6_dns1, sizeof(pctx->ipv6_dns1));
+	strlcpy(pctx->ipv6_dns2, hdr.ipv6_dns2, sizeof(pctx->ipv6_dns2));
+
+	if (hdr.state_len > 0) {
+		pctx->state = talloc_size(pctx, hdr.state_len);
+		if (pctx->state == NULL)
+			return -1;
+		if (read_blob(fd, pctx->state, hdr.state_len) < 0)
+			return -1;
+		pctx->state_len = hdr.state_len;
+	}
+
+	for (i = 0; i < hdr.groupnames_size; i++) {
+		pctx->groupnames[i] =
+			read_counted_string(pctx, fd, MAX_GROUPNAME_SIZE);
+		if (pctx->groupnames[i] == NULL)
+			return -1;
+		pctx->groupnames_size++;
+	}
+
+	if (hdr.routes_size > 0) {
+		pctx->routes = talloc_zero_size(pctx, sizeof(char *) *
+							      hdr.routes_size);
+		if (pctx->routes == NULL)
+			return -1;
+	}
+
+	for (i = 0; i < hdr.routes_size; i++) {
+		pctx->routes[i] =
+			read_counted_string(pctx, fd, MAX_RADIUS_ASYNC_STRING);
+		if (pctx->routes[i] == NULL)
+			return -1;
+		pctx->routes_size++;
+	}
+
+	*auth_ret = hdr.auth_ret;
+	return 0;
+}
+
 static int radius_auth_msg(void *ctx, void *pool, passwd_msg_st *pst)
 {
 	struct radius_ctx_st *pctx = ctx;
@@ -664,9 +1094,9 @@ static int radius_auth_msg(void *ctx, void *pool, passwd_msg_st *pst)
 		 */
 		prompt_hash =
 			hash_any(pctx->pass_msg, strlen(pctx->pass_msg), 0);
-		if (pctx->prev_prompt_hash != prompt_hash)
+		if (pctx->prev_prompt_hash != (uint64_t)prompt_hash)
 			pctx->passwd_counter++;
-		pctx->prev_prompt_hash = prompt_hash;
+		pctx->prev_prompt_hash = (uint64_t)prompt_hash;
 		pst->counter = pctx->passwd_counter;
 	}
 

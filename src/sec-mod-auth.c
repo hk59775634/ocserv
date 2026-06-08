@@ -30,6 +30,8 @@
 #include <netdb.h>
 #include <signal.h>
 #include <errno.h>
+#include <dirent.h>
+#include <limits.h>
 #include <sys/ioctl.h>
 #include <gnutls/gnutls.h>
 #include <gnutls/crypto.h>
@@ -46,6 +48,7 @@
 #include <auth/plain.h>
 #include <common.h>
 #include <auth/pam.h>
+#include <auth/radius.h>
 #include <sec-mod.h>
 #include <vpn.h>
 #include <base64-helper.h>
@@ -776,12 +779,84 @@ int handle_sec_auth_stats_cmd(sec_mod_st *sec, const CliStatsMsg *req,
 	return 0;
 }
 
+#ifdef HAVE_RADIUS
+
+/* Absolute upper bound on simultaneously running radius helper forks.
+ * Each pending helper costs a fork+exec and a socketpair fd, so cap
+ * it independently from max_clients to bound resource use under
+ * pre-auth load. */
+#define MAX_RADIUS_PENDING_AUTH_JOBS 64
+
+static unsigned int radius_pending_limit(sec_mod_st *sec, client_entry_st *e)
+{
+	unsigned int max;
+
+	(void)sec;
+
+	max = e->vhost->config->max_clients;
+	if (max == 0)
+		max = 1024;
+
+	/* No more than half of max_clients in pending state at any time;
+	 * keep a small floor for low-max-clients configs and an absolute
+	 * ceiling to bound fork pressure. */
+	max = max / 2;
+	if (max < 16)
+		max = 16;
+	if (max > MAX_RADIUS_PENDING_AUTH_JOBS)
+		max = MAX_RADIUS_PENDING_AUTH_JOBS;
+	return max;
+}
+
+/* Close every inherited fd except keep_fd before exec'ing the helper.
+ * Prefers /proc/self/fd enumeration to avoid issuing tens of thousands
+ * of close() syscalls per auth. */
+static void close_inherited_fds_except(int keep_fd)
+{
+	DIR *d;
+	long max_fd;
+	int fd;
+
+	d = opendir("/proc/self/fd");
+	if (d != NULL) {
+		struct dirent *de;
+		int dir_fd = dirfd(d);
+
+		while ((de = readdir(d)) != NULL) {
+			char *endp;
+			long parsed;
+
+			errno = 0;
+			parsed = strtol(de->d_name, &endp, 10);
+			if (errno != 0 || endp == de->d_name || *endp != 0)
+				continue;
+			if (parsed < 3 || parsed > INT_MAX)
+				continue;
+			if ((int)parsed == keep_fd || (int)parsed == dir_fd)
+				continue;
+			close((int)parsed);
+		}
+		closedir(d);
+		return;
+	}
+
+	max_fd = sysconf(_SC_OPEN_MAX);
+	if (max_fd < 0 || max_fd > 65536)
+		max_fd = 65536;
+
+	for (fd = 3; fd < max_fd; fd++) {
+		if (fd != keep_fd)
+			close(fd);
+	}
+}
+#endif
+
 int handle_sec_auth_cont(int cfd, sec_mod_st *sec, const SecAuthContMsg *req)
 {
 	client_entry_st *e;
 	int ret;
 
-	if (req->sid.len != SID_SIZE) {
+	if (req->sid.len != SID_SIZE || req->sid.data == NULL) {
 		seclog(sec, LOG_ERR,
 		       "auth cont but with illegal sid size (%d)!",
 		       (int)req->sid.len);
@@ -823,6 +898,130 @@ int handle_sec_auth_cont(int cfd, sec_mod_st *sec, const SecAuthContMsg *req)
 
 	e->status = PS_AUTH_CONT;
 
+#ifdef HAVE_RADIUS
+	if (radius_auth_is_async_candidate(e->module)) {
+		int fd[2];
+		pid_t pid;
+		pending_auth_job_st *job;
+
+		if (sec->pending_auth_jobs_count >=
+		    radius_pending_limit(sec, e)) {
+			seclog(sec, LOG_WARNING,
+			       "too many pending radius auth helper jobs");
+			ret = ERR_AUTH_FAIL;
+			goto cleanup;
+		}
+
+		if (socketpair(AF_UNIX, SOCK_STREAM, 0, fd) < 0) {
+			seclog(sec, LOG_ERR,
+			       "cannot create radius auth helper socket");
+			ret = -1;
+			goto cleanup;
+		}
+
+		if (fd[0] >= FD_SETSIZE) {
+			close(fd[0]);
+			close(fd[1]);
+			seclog(sec, LOG_ERR,
+			       "radius auth helper fd exceeds select fd_set size");
+			ret = -1;
+			goto cleanup;
+		}
+
+		pid = fork();
+		if (pid < 0) {
+			close(fd[0]);
+			close(fd[1]);
+			seclog(sec, LOG_ERR, "cannot fork radius auth helper");
+			ret = -1;
+			goto cleanup;
+		}
+
+		if (pid == 0) {
+			char fdstr[32];
+			const char *helper_path = "ocserv";
+
+			close(fd[0]);
+			close_inherited_fds_except(fd[1]);
+			snprintf(fdstr, sizeof(fdstr), "%d", fd[1]);
+
+			/* Prefer the absolute path resolved at startup so we
+			 * survive a chdir/chroot since launch. Fall back to
+			 * the original argv[0] if resolution failed. */
+			if (saved_executable_path[0] != 0)
+				helper_path = saved_executable_path;
+			else if (saved_argc > 0 && saved_argv != NULL &&
+				 saved_argv[0] != NULL)
+				helper_path = saved_argv[0];
+
+			execlp(helper_path, "ocserv-radius-helper",
+			       "--ocserv-radius-helper", fdstr, (char *)NULL);
+
+#if defined(__linux__)
+			execl("/proc/self/exe", "ocserv-radius-helper",
+			      "--ocserv-radius-helper", fdstr, (char *)NULL);
+#elif defined(__FreeBSD__) || defined(__DragonFly__)
+			execl("/proc/curproc/file", "ocserv-radius-helper",
+			      "--ocserv-radius-helper", fdstr, (char *)NULL);
+#elif defined(__NetBSD__)
+			execl("/proc/curproc/exe", "ocserv-radius-helper",
+			      "--ocserv-radius-helper", fdstr, (char *)NULL);
+#elif defined(__sun)
+			execl("/proc/self/path/a.out", "ocserv-radius-helper",
+			      "--ocserv-radius-helper", fdstr, (char *)NULL);
+#endif
+			_exit(EXIT_FAILURE);
+		}
+
+		close(fd[1]);
+
+		if (radius_auth_pass_async_send_request(
+			    e->auth_ctx, req->password,
+			    (unsigned int)strlen(req->password), fd[0]) < 0) {
+			int wret;
+
+			close(fd[0]);
+			kill(pid, SIGTERM);
+			do {
+				wret = waitpid(pid, NULL, 0);
+			} while (wret == -1 && errno == EINTR);
+			ret = -1;
+			goto cleanup;
+		}
+
+		job = talloc_zero(sec, pending_auth_job_st);
+		if (job == NULL) {
+			int wret;
+
+			close(fd[0]);
+			kill(pid, SIGTERM);
+			do {
+				wret = waitpid(pid, NULL, 0);
+			} while (wret == -1 && errno == EINTR);
+			ret = -1;
+			goto cleanup;
+		}
+
+		job->worker_fd = cfd;
+		job->helper_fd = fd[0];
+		job->helper_pid = pid;
+		memcpy(job->sid, e->sid, sizeof(job->sid));
+		job->started = time(NULL);
+		list_add_tail(&sec->pending_auth_jobs, &job->list);
+		sec->pending_auth_jobs_count++;
+
+		e->status = PS_AUTH_PENDING;
+		e->in_use++;
+
+		seclog(sec, LOG_DEBUG,
+		       "radius auth for user '%s' " SESSION_STR
+		       " delegated to helper pid %ld",
+		       e->acct_info.username, e->acct_info.safe_id, (long)pid);
+
+		return SEC_AUTH_PENDING;
+	}
+#endif
+
 	ret = e->module->auth_pass(e->auth_ctx, req->password,
 				   strlen(req->password));
 	if (ret < 0) {
@@ -836,6 +1035,98 @@ int handle_sec_auth_cont(int cfd, sec_mod_st *sec, const SecAuthContMsg *req)
 
 cleanup:
 	return handle_sec_auth_res(cfd, sec, e, ret);
+}
+
+int handle_sec_auth_pending_job(sec_mod_st *sec, pending_auth_job_st *job)
+{
+#ifdef HAVE_RADIUS
+	client_entry_st *e;
+	int ret = -1;
+	int status;
+
+	e = find_client_entry(sec, job->sid);
+	if (e == NULL) {
+		seclog(sec, LOG_INFO,
+		       "radius auth helper replied for non-existing SID");
+		return -1;
+	}
+
+	do {
+		ret = waitpid(job->helper_pid, &status, WNOHANG);
+	} while (ret == -1 && errno == EINTR);
+
+	if (ret == 0) {
+		seclog(sec, LOG_DEBUG,
+		       "radius auth helper fd readable before process exit");
+	}
+
+	if (radius_auth_pass_async_apply(e->auth_ctx, job->helper_fd, &ret) <
+	    0) {
+		seclog(sec, LOG_ERR,
+		       "cannot read radius auth helper result for user '%s' " SESSION_STR,
+		       e->acct_info.username, e->acct_info.safe_id);
+		ret = ERR_AUTH_FAIL;
+	}
+
+	if (e->in_use > 0)
+		e->in_use--;
+
+	/* If pending state was already cancelled by another path, avoid
+	 * clobbering state or sending a duplicate worker reply. */
+	if (e->status != PS_AUTH_PENDING) {
+		seclog(sec, LOG_DEBUG,
+		       "radius auth helper result for user '%s' " SESSION_STR
+		       " discarded: entry no longer pending (status %s)",
+		       e->acct_info.username, e->acct_info.safe_id,
+		       ps_status_to_str(e->status, 0));
+		return 0;
+	}
+	e->status = PS_AUTH_CONT;
+
+	return handle_sec_auth_res(job->worker_fd, sec, e, ret);
+#else
+	(void)sec;
+	(void)job;
+	return -1;
+#endif
+}
+
+int handle_sec_auth_pending_timeout(sec_mod_st *sec, pending_auth_job_st *job)
+{
+#ifdef HAVE_RADIUS
+	client_entry_st *e;
+
+	e = find_client_entry(sec, job->sid);
+	if (e == NULL) {
+		seclog(sec, LOG_INFO,
+		       "radius auth helper timed out for non-existing SID");
+		return -1;
+	}
+
+	if (e->in_use > 0)
+		e->in_use--;
+
+	/* Same race window as handle_sec_auth_pending_job(). */
+	if (e->status != PS_AUTH_PENDING) {
+		seclog(sec, LOG_DEBUG,
+		       "radius auth helper timeout for user '%s' " SESSION_STR
+		       " discarded: entry no longer pending (status %s)",
+		       e->acct_info.username, e->acct_info.safe_id,
+		       ps_status_to_str(e->status, 0));
+		return 0;
+	}
+	e->status = PS_AUTH_CONT;
+
+	seclog(sec, LOG_INFO,
+	       "radius auth helper timed out for user '%s' " SESSION_STR,
+	       e->acct_info.username, e->acct_info.safe_id);
+
+	return handle_sec_auth_res(job->worker_fd, sec, e, ERR_AUTH_FAIL);
+#else
+	(void)sec;
+	(void)job;
+	return -1;
+#endif
 }
 
 static int set_module(sec_mod_st *sec, vhost_cfg_st *vhost, client_entry_st *e,
