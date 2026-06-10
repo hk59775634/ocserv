@@ -59,6 +59,10 @@ static char altstack_buf[65536];
 static void *guard_base;
 static size_t guard_size;
 
+/* Incremented by recurse(); reported by the SIGALRM handler to show whether
+ * the stack grew (low count) or TCO turned the recursion into a flat loop. */
+static volatile sig_atomic_t recurse_count;
+
 static void sigsegv_handler(int sig, siginfo_t *si, void *ctx)
 {
 	(void)sig;
@@ -67,21 +71,37 @@ static void sigsegv_handler(int sig, siginfo_t *si, void *ctx)
 	if ((char *)si->si_addr >= (char *)guard_base &&
 	    (char *)si->si_addr < (char *)guard_base + guard_size)
 		_exit(0);
-	/* Fault elsewhere — not the guard page; report failure. */
+	fprintf(stderr, "FAIL: SIGSEGV outside guard page, fault_addr=%p\n",
+		si->si_addr);
 	_exit(1);
+}
+
+/* SIGALRM fires if the stack never overflows within the deadline. */
+static void sigalrm_handler(int sig)
+{
+	(void)sig;
+	fprintf(stderr,
+		"FAIL: no stack overflow after %d iterations"
+		" — tail-call optimization suppressed stack growth\n",
+		recurse_count);
+	_exit(3);
 }
 
 static void recurse(int depth);
 /* volatile pointer breaks static infinite-recursion analysis */
 static void (*volatile recurse_ptr)(int) = recurse;
 
-/* Each frame consumes ~512 bytes; ~128 frames exhaust a 64 KB stack. */
+/* Each frame consumes ~512 bytes; ~128 frames exhaust a 64 KB stack.
+ * frame[0] is read AFTER the recursive call so the frame stays live across
+ * the call — this prevents the compiler from tail-calling recurse_ptr even
+ * with optimizations. */
 static void recurse(int depth)
 {
 	volatile char frame[512];
 	frame[0] = (char)depth;
-	(void)frame[0]; /* read back to prevent the frame being optimized away */
+	recurse_count++;
 	recurse_ptr(depth + 1);
+	(void)frame[0];
 }
 
 static void overflow_coroutine(void *data)
@@ -138,6 +158,13 @@ int main(void)
 			_exit(1);
 		}
 
+		/* Arm a 10-second deadline so that if the stack never overflows
+		 * (e.g. the compiler tail-called recurse_ptr and no frame
+		 * accumulates) the child exits with a diagnostic instead of
+		 * hanging until the meson timeout fires. */
+		signal(SIGALRM, sigalrm_handler);
+		alarm(10);
+
 		coroutine_t cr = co_create(overflow_coroutine, NULL, stack,
 					   TEST_STACK_SIZE);
 		if (cr == NULL) {
@@ -163,16 +190,23 @@ int main(void)
 		return 0;
 	}
 
-	if (WIFEXITED(status))
-		fprintf(stderr,
-			"FAIL: child exited with status %d "
-			"(fault outside guard page or no fault)\n",
-			WEXITSTATUS(status));
-	else
+	if (WIFEXITED(status)) {
+		int code = WEXITSTATUS(status);
+		if (code == 3)
+			fprintf(stderr,
+				"FAIL: child SIGALRM fired — "
+				"stack never overflowed (tail-call optimization?)\n");
+		else
+			fprintf(stderr,
+				"FAIL: child exited with status %d "
+				"(fault outside guard page or setup error)\n",
+				code);
+	} else {
 		fprintf(stderr,
 			"FAIL: child killed by signal %d "
 			"(SIGSEGV handler did not run?)\n",
 			WTERMSIG(status));
+	}
 	return 1;
 }
 
