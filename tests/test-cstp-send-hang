@@ -55,7 +55,7 @@ fi
 
 if test -z "${IP}"; then
 	echo "no ip tool found"
-	exit 77
+	exit 1
 fi
 
 echo "Testing that cstp_send() does not hang when the peer freezes (issue #638)..."

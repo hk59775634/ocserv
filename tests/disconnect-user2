@@ -91,6 +91,14 @@ if test $? != 0;then
         exit 1
 fi
 
+# Wait for main + sec-mod to finish session cleanup before reconnecting;
+# without this, session_close() blocks main's event loop and the reconnect
+# worker's AUTH_COOKIE_REQ goes unread, causing a deadlock.
+for i in $(seq 1 10); do
+	${OCCTL} -s ${OCCTL_SOCKET} show user test >/dev/null 2>&1 || break
+	sleep 1
+done
+
 echo " * Re-connecting to obtain cookie after disconnect... "
 ( ${CMDNS1} ${OPENCONNECT} -q ${ADDRESS}:${PORT} -u test --servercert=pin-sha256:xp3scfzy3rOQsv9NcOve/8YVVv+pHr4qNCXEXrNl5s8= -s ${srcdir}/scripts/vpnc-script -C "${COOKIE}" --pid-file=${CLIPID} -b )
 if test $? = 0;then

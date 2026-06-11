@@ -52,7 +52,7 @@ eval "${GETPORT}"
 
 if test -z "${IP}"; then
 	echo "no IP tool is present"
-	exit 77
+	exit 1
 fi
 
 if ! command -v nft >/dev/null 2>&1; then

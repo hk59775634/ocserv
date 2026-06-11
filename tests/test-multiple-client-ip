@@ -34,7 +34,7 @@ eval "${GETPORT}"
 
 if test -z "${IP}";then
 	echo "no IP tool is present"
-	exit 77
+	exit 1
 fi
 
 if test "$(id -u)" != "0";then

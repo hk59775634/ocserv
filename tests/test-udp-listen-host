@@ -44,7 +44,7 @@ fi
 
 if test -z "${IP}";then
 	echo "no IP tool is present"
-	exit 77
+	exit 1
 fi
 
 echo "Testing ocserv udp-listen-host"
