@@ -248,6 +248,70 @@ sequenceDiagram
     m->>ctl: CTL_CMD_TERMINATE_*_REP
 ```
 
+## RADIUS asynchronous authentication
+
+sec-mod is single-threaded and runs a `(p)select()` event loop. Most
+authentication backends complete locally and quickly, but RADIUS performs a
+network round-trip (`rc_aaa()`) to a possibly slow or unreachable server. If
+that call ran inline in sec-mod, the whole loop — and therefore every other
+client's authentication, accounting and session handling — would block for the
+duration of the RADIUS exchange.
+
+To keep the loop responsive, a RADIUS `SEC_AUTH_CONT` is delegated to a
+short-lived helper process. For each such request sec-mod creates a
+`socketpair()` and `fork()`s; the child re-exec's the ocserv binary with
+`--ocserv-radius-helper <fd>` (preferring the absolute path resolved at
+startup, then the procfs self-image, then `argv[0]`). The helper resets the
+inherited signal mask, arms `PR_SET_PDEATHSIG`, reads the radcli configuration,
+**then drops to the configured `run-as-user`/`run-as-group`** before the
+(network) RADIUS round-trip, writes the result back over the socketpair and
+exits.
+
+Unlike sec-mod, which must stay root, the helper is an isolated single-purpose
+process, so it does not contact the RADIUS server as root. The only steps it
+performs while privileged are reading the request from its own socketpair and
+loading the radcli config/dictionary/secret (exactly as sec-mod does today);
+immediately afterwards it `setgid()`/`setuid()`s to the run-as user, and the
+blocking `rc_aaa()` exchange with the network runs unprivileged. Because the
+radcli files are still read as root, this needs no change to their permissions.
+If `run-as-user` is not configured the helper stays as launched, matching the
+worker's behaviour.
+
+The two messages exchanged over the socketpair are protobuf-c messages defined
+in `src/ipc.proto` (`radius_async_request_msg`, `radius_async_result_msg`) and
+are sent with the same `send_msg()`/`recv_msg()` framing used elsewhere in the
+IPC layer — there is no hand-rolled wire format. The request carries the radcli
+config path, NAS identifier, group separator, client identity and the password;
+the result carries the authentication outcome plus any RADIUS-supplied
+per-session configuration (groups, routes, framed addresses, timeouts, State for
+challenge/response continuation).
+
+While the helper runs, the client entry is held in the new `PS_AUTH_PENDING`
+state and `handle_sec_auth_cont()` returns `SEC_AUTH_PENDING` so sec-mod does
+*not* reply to the worker yet. The job is tracked in `sec->pending_auth_jobs`,
+and the helper's fd is added to the event loop's read set. When the fd becomes
+readable, `handle_sec_auth_pending_job()` reads the result, applies it and sends
+the deferred `SEC_AUTH_REP` to the worker. Pending jobs are bounded
+(`radius_pending_limit()`) to cap fork/fd pressure from unauthenticated CONT
+traffic. If a helper exceeds `auth-timeout` it is killed and the client gets an
+authentication failure; on shutdown all pending helpers are terminated.
+
+```mermaid
+sequenceDiagram
+    participant w as worker
+    participant sm as sec-mod
+    participant h as radius-helper
+
+    w->>sm: SEC_AUTH_CONT (password)
+    Note over sm: auth state: PS_AUTH_PENDING
+    sm->>h: fork/exec + radius_async_request_msg
+    Note over sm: event loop keeps serving other clients
+    h->>h: rc_aaa() RADIUS round-trip
+    h->>sm: radius_async_result_msg
+    Note over sm: helper fd readable -> apply result
+    sm->>w: SEC_AUTH_REP (OK / FAILED / MSG)
+```
+
 ## Cookies
 
 Cookies are valid for the value configured in `cookie-timeout` option, after

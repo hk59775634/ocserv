@@ -30,9 +30,21 @@
 
 #include "vhost.h"
 #include "log.h"
+#include <sys/types.h>
+#include <ccan/list/list.h>
 
 #define SESSION_STR "(session: %.6s)"
 #define MAX_GROUPS 512
+#define SEC_AUTH_PENDING 1
+
+typedef struct pending_auth_job_st {
+	struct list_node list;
+	int worker_fd;
+	int helper_fd;
+	pid_t helper_pid;
+	uint8_t sid[SID_SIZE];
+	time_t started;
+} pending_auth_job_st;
 
 typedef struct sec_mod_st {
 	struct list_head *vconfig;
@@ -40,6 +52,8 @@ typedef struct sec_mod_st {
 	void *sec_mod_pool;
 
 	struct htable *client_db;
+	struct list_head pending_auth_jobs;
+	unsigned int pending_auth_jobs_count;
 	int cmd_fd;
 	int cmd_fd_sync;
 
@@ -154,6 +168,8 @@ void handle_sec_auth_ban_ip_reply(sec_mod_st *sec, const BanIpReplyMsg *msg);
 int handle_sec_auth_init(int cfd, sec_mod_st *sec, const SecAuthInitMsg *req,
 			 pid_t pid);
 int handle_sec_auth_cont(int cfd, sec_mod_st *sec, const SecAuthContMsg *req);
+int handle_sec_auth_pending_job(sec_mod_st *sec, pending_auth_job_st *job);
+int handle_sec_auth_pending_timeout(sec_mod_st *sec, pending_auth_job_st *job);
 int handle_secm_session_open_cmd(sec_mod_st *sec, int fd,
 				 const SecmSessionOpenMsg *req);
 int handle_secm_session_close_cmd(sec_mod_st *sec, int fd,

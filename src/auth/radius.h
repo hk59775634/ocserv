@@ -26,6 +26,8 @@
 
 #ifdef HAVE_RADIUS
 
+#include <stdint.h>
+
 #ifdef LEGACY_RADIUS
 #include <freeradius-client.h>
 #else
@@ -34,6 +36,7 @@
 
 struct radius_vhost_ctx {
 	rc_handle *rh;
+	char config[_POSIX_PATH_MAX];
 	char nas_identifier[64];
 	char group_separator[2]; /* separator used in OU= Class attributes */
 };
@@ -76,10 +79,19 @@ struct radius_ctx_st {
 	char *state;
 	unsigned int state_len;
 	unsigned int passwd_counter;
-	size_t prev_prompt_hash;
+	/* Width-stable for IPC: serialised as uint64_t over the helper
+	 * socketpair so a 32-bit and 64-bit build interop without silent
+	 * truncation if parent and helper ever diverge in word size. */
+	uint64_t prev_prompt_hash;
 };
 
 extern const struct auth_mod_st radius_auth_funcs;
+int radius_auth_is_async_candidate(const struct auth_mod_st *module);
+int radius_auth_pass_async_send_request(void *ctx, const char *pass,
+					unsigned int pass_len, int uid, int gid,
+					int fd);
+int radius_auth_helper_main(int fd);
+int radius_auth_pass_async_apply(void *ctx, int fd, int *auth_ret);
 
 #endif
 #endif

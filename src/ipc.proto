@@ -412,3 +412,65 @@ message snapshot_state_msg
 {
 
 }
+
+
+/*
+ * == RADIUS async authentication helper ==
+ *
+ * For each blocking RADIUS Access-Request, sec-mod fork/exec's a short-lived
+ * helper so the single-threaded event loop is not stalled while the RADIUS
+ * server is contacted. These two messages are exchanged over a private
+ * socketpair: sec-mod (parent) sends the request, the helper performs the
+ * RADIUS round-trip and returns the result. See the RADIUS section of
+ * doc/design.md.
+ */
+
+/* sec-mod -> helper */
+message radius_async_request_msg
+{
+	required string config = 1; /* radcli config path */
+	required string nas_identifier = 2;
+	required string group_separator = 3;
+	required string username = 4;
+	required string remote_ip = 5;
+	required string our_ip = 6;
+	required string user_agent = 7;
+	required bytes password = 8;
+	optional bytes state = 9; /* RADIUS State for challenge continuation */
+	required uint32 retries = 10;
+	required uint32 id = 11;
+	required uint32 passwd_counter = 12;
+	required uint64 prev_prompt_hash = 13;
+	/* run-as user/group the helper drops to before contacting RADIUS;
+	 * -1 means "not configured, stay as launched" (same sentinel as the
+	 * worker's setuid/setgid path). */
+	optional sint32 uid = 14 [default = -1];
+	optional sint32 gid = 15 [default = -1];
+}
+
+/* helper -> sec-mod */
+message radius_async_result_msg
+{
+	required sint32 auth_ret = 1; /* ERR_* / ERR_SUCCESS */
+	optional bytes state = 2;
+	repeated string groupnames = 3;
+	repeated string routes = 4;
+	optional uint32 interim_interval_secs = 5;
+	optional uint32 session_timeout_secs = 6;
+	optional uint32 rx_per_sec = 7;
+	optional uint32 tx_per_sec = 8;
+	required uint32 retries = 9;
+	required uint32 id = 10;
+	required uint32 passwd_counter = 11;
+	required uint64 prev_prompt_hash = 12;
+	optional uint32 ipv6_subnet_prefix = 13;
+	optional string pass_msg = 14;
+	optional string ipv4 = 15;
+	optional string ipv4_mask = 16;
+	optional string ipv4_dns1 = 17;
+	optional string ipv4_dns2 = 18;
+	optional string ipv6 = 19;
+	optional string ipv6_net = 20;
+	optional string ipv6_dns1 = 21;
+	optional string ipv6_dns2 = 22;
+}
