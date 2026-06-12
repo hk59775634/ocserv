@@ -45,6 +45,7 @@ static rlim_t compute_worker_data_limit(unsigned headroom_kb)
 	/* statm: size resident shared text lib data dt (all in pages) */
 	unsigned long size, resident, shared, text, lib, data;
 	int n;
+	long pagesize;
 
 	f = fopen("/proc/self/statm", "r");
 	if (!f)
@@ -56,8 +57,14 @@ static rlim_t compute_worker_data_limit(unsigned headroom_kb)
 	if (n != 6)
 		return 0;
 
-	return (rlim_t)data * (rlim_t)sysconf(_SC_PAGESIZE) +
-	       (rlim_t)headroom_kb * 1024;
+	pagesize = sysconf(_SC_PAGESIZE);
+	if (pagesize < 0)
+		return 0;
+	/* A process where data * pagesize overflows unsigned long (64-bit)
+	 * would use more than 16 million TB of data pages!
+	 * 
+	 * coverity[INTEGER_OVERFLOW] */
+	return (rlim_t)data * (rlim_t)pagesize + (rlim_t)headroom_kb * 1024;
 }
 
 /* Apply per-worker heap cap (RLIMIT_DATA) unless explicitly disabled. */
