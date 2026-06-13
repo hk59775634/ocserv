@@ -30,6 +30,7 @@
 #include <netdb.h>
 #include <system.h>
 #include <errno.h>
+#include <limits.h>
 #include <sys/ioctl.h>
 #include <sys/resource.h>
 #include <sys/types.h>
@@ -59,6 +60,7 @@
 #include <tun.h>
 #include <grp.h>
 #include <ip-lease.h>
+#include <auth/radius.h>
 #include <ccan/list/list.h>
 #include <hmac.h>
 #include <base64-helper.h>
@@ -85,6 +87,21 @@ static void resume_accept_cb(EV_P_ ev_timer *w, int revents);
 sigset_t sig_default_set;
 struct ev_loop *main_loop;
 static unsigned int allow_broken_clients;
+
+#ifdef HAVE_RADIUS
+static int parse_radius_helper_fd(const char *arg)
+{
+	char *end = NULL;
+	long fd;
+
+	errno = 0;
+	fd = strtol(arg, &end, 10);
+	if (errno != 0 || end == arg || *end != 0 || fd < 3 || fd > INT_MAX)
+		return -1;
+
+	return (int)fd;
+}
+#endif
 
 typedef struct sec_mod_watcher_st {
 	ev_io sec_mod_watcher;
@@ -1475,8 +1492,43 @@ int main(int argc, char *argv[])
 	talloc_enable_leak_report_full();
 #endif
 
+#ifdef HAVE_RADIUS
+	if (argc == 3 && strcmp(argv[1], "--ocserv-radius-helper") == 0) {
+		int helper_fd = parse_radius_helper_fd(argv[2]);
+
+		if (helper_fd < 0)
+			return EXIT_FAILURE;
+		return radius_auth_helper_main(helper_fd);
+	}
+#endif
+
 	saved_argc = argc;
 	saved_argv = argv;
+
+	/* Resolve our executable path to an absolute one, so that we can
+	 * re-exec ourselves (e.g. as the radius auth helper) even if cwd
+	 * has changed since startup. Falls back gracefully if resolution
+	 * fails; helper launch includes /proc fallbacks. */
+	saved_executable_path[0] = 0;
+	if (argc > 0 && argv[0] != NULL && argv[0][0] != 0) {
+		char *resolved_path;
+
+		if (argv[0][0] == '/') {
+			strlcpy(saved_executable_path, argv[0],
+				sizeof(saved_executable_path));
+		} else {
+			/* Avoid FORTIFY aborts on platforms where PATH_MAX is
+			 * larger than our fixed storage. */
+			resolved_path = realpath(argv[0], NULL);
+			if (resolved_path != NULL) {
+				strlcpy(saved_executable_path, resolved_path,
+					sizeof(saved_executable_path));
+				free(resolved_path);
+			} else {
+				saved_executable_path[0] = 0;
+			}
+		}
+	}
 
 	/* ensure our string comparisons do not take into account any system
 	 * locale. We compare strings that come through our configuration or
