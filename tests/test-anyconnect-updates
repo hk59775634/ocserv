@@ -1,0 +1,211 @@
+#!/bin/sh
+#
+# Copyright (C) 2026 OpenConnect VPN project
+#
+# This file is part of ocserv.
+
+SERV="${SERV:-../src/ocserv}"
+srcdir=${srcdir:-.}
+NO_NEED_ROOT=1
+PIDFILE=test-anyconnect-updates.$$.pid
+MANIFEST=test-anyconnect-updates.$$.manifest
+MACOS_MANIFEST=test-anyconnect-updates.$$.macos-manifest
+MACOS_CURRENT_MANIFEST=test-anyconnect-updates.$$.macos-current-manifest
+MACOS_DOWNLOADER_MANIFEST=test-anyconnect-updates.$$.macos-downloader-manifest
+MACOS_HASH_MANIFEST=test-anyconnect-updates.$$.macos-hash-manifest
+MACOS_PLATFORM=test-anyconnect-updates.$$.macos-platform
+EMPTY_MANIFEST=test-anyconnect-updates.$$.empty
+UPDATE_TXT=test-anyconnect-updates.$$.update
+MACOS_UPDATE_TXT=test-anyconnect-updates.$$.macos-update
+MACOS_CURRENT_UPDATE_TXT=test-anyconnect-updates.$$.macos-current-update
+LINUX_ARM64_UPDATE_TXT=test-anyconnect-updates.$$.linux-arm64-update
+EMPTY_UPDATE_TXT=test-anyconnect-updates.$$.empty-update
+DOWNLOAD=test-anyconnect-updates.$$.download
+DOWNLOADER=test-anyconnect-updates.$$.downloader
+
+. `dirname $0`/common.sh
+
+eval "${GETPORT}"
+
+echo "Testing AnyConnect update manifest generation... "
+
+update_config test1.config
+echo "udp-port = 0" >>${CONFIG}
+
+TESTDIR=${PWD}
+CONFIG=${TESTDIR}/${CONFIG}
+PIDFILE=${TESTDIR}/${PIDFILE}
+MANIFEST=${TESTDIR}/${MANIFEST}
+MACOS_MANIFEST=${TESTDIR}/${MACOS_MANIFEST}
+MACOS_CURRENT_MANIFEST=${TESTDIR}/${MACOS_CURRENT_MANIFEST}
+MACOS_DOWNLOADER_MANIFEST=${TESTDIR}/${MACOS_DOWNLOADER_MANIFEST}
+MACOS_HASH_MANIFEST=${TESTDIR}/${MACOS_HASH_MANIFEST}
+MACOS_PLATFORM=${TESTDIR}/${MACOS_PLATFORM}
+EMPTY_MANIFEST=${TESTDIR}/${EMPTY_MANIFEST}
+UPDATE_TXT=${TESTDIR}/${UPDATE_TXT}
+MACOS_UPDATE_TXT=${TESTDIR}/${MACOS_UPDATE_TXT}
+MACOS_CURRENT_UPDATE_TXT=${TESTDIR}/${MACOS_CURRENT_UPDATE_TXT}
+LINUX_ARM64_UPDATE_TXT=${TESTDIR}/${LINUX_ARM64_UPDATE_TXT}
+EMPTY_UPDATE_TXT=${TESTDIR}/${EMPTY_UPDATE_TXT}
+DOWNLOAD=${TESTDIR}/${DOWNLOAD}
+DOWNLOADER=${TESTDIR}/${DOWNLOADER}
+UPDATE_ROOT=${TESTDIR}/test-anyconnect-updates.$$.root
+ANYCONNECT_PLATFORM_HEADER="X-AnyConnect-Identifier-Platform: Windows"
+MACOS_PLATFORM_HEADER="X-AnyConnect-Identifier-Platform: Darwin_i386"
+LINUX_ARM64_PLATFORM_HEADER="X-AnyConnect-Identifier-Platform: Linux_ARM64"
+HOST_HEADER="Host: vpn.example.test"
+
+if test -n "${SOCKET_WRAPPER_DIR}" && ! echo "${SOCKET_WRAPPER_DIR}" | grep -q '^/';then
+	SOCKET_WRAPPER_DIR=${TESTDIR}/${SOCKET_WRAPPER_DIR}
+	export SOCKET_WRAPPER_DIR
+fi
+
+rm -rf "${UPDATE_ROOT}"
+mkdir -p "${UPDATE_ROOT}/1/binaries"
+printf "old" >"${UPDATE_ROOT}/1/binaries/anyconnect-win-4.10.00093-core-vpn-webdeploy-k9.pkg"
+printf "new" >"${UPDATE_ROOT}/1/binaries/anyconnect-win-4.10.07062-core-vpn-webdeploy-k9.pkg"
+printf "linux" >"${UPDATE_ROOT}/1/binaries/anyconnect-linux64-4.9.06037-core-vpn-webdeploy-k9.pkg"
+mkdir -p "${UPDATE_ROOT}/1/webdeploy/cisco-secure-client-macos-5.1.15.287-webdeploy-k9.pkg/binaries"
+cat >"${UPDATE_ROOT}/1/webdeploy/cisco-secure-client-macos-5.1.15.287-webdeploy-k9.pkg/VPNManifest.xml" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<vpn rev="1.0">
+  <file version="5.1.15.287" id="VPNCore" is_core="yes" type="dmg" action="install" os="macos:11.0">
+    <uri>binaries/cisco-secure-client-macos-5.1.15.287-core-vpn-webdeploy-k9.dmg</uri>
+    <display-name>Cisco Secure Client</display-name>
+  </file>
+</vpn>
+EOF
+cat >"${UPDATE_ROOT}/1/webdeploy/cisco-secure-client-macos-5.1.15.287-webdeploy-k9.pkg/VPNHashManifest.xml" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<vpn rev="1.0">
+  <file type="dmg">
+    <uri>binaries/cisco-secure-client-macos-5.1.15.287-core-vpn-webdeploy-k9.dmg</uri>
+    <hash type="sha256">0123456789ABCDEF</hash>
+  </file>
+</vpn>
+EOF
+printf '#!/bin/sh\n# static macOS downloader\n' >"${UPDATE_ROOT}/1/webdeploy/cisco-secure-client-macos-5.1.15.287-webdeploy-k9.pkg/binaries/vpndownloader.sh"
+printf "macos-dmg" >"${UPDATE_ROOT}/1/webdeploy/cisco-secure-client-macos-5.1.15.287-webdeploy-k9.pkg/binaries/cisco-secure-client-macos-5.1.15.287-core-vpn-webdeploy-k9.dmg"
+printf "macos-dmg-no-webdeploy" >"${UPDATE_ROOT}/1/webdeploy/cisco-secure-client-macos-5.1.15.287-webdeploy-k9.pkg/binaries/anyconnect-ise-network-assistant-macos-5.1.15.287.dmg"
+printf "linux-arm64" >"${UPDATE_ROOT}/1/binaries/cisco-secure-client-linux-arm64-5.1.15.287-webdeploy-k9.pkg"
+printf "bad" >"${UPDATE_ROOT}/1/binaries/not-an-anyconnect-package.pkg"
+
+( cd "${UPDATE_ROOT}" && launch_sr_server -d 1 -p ${PIDFILE} -f -c ${CONFIG} ) & PID=$!
+wait_server $PID
+
+( LD_PRELOAD=libsocket_wrapper.so curl --user-agent "Cisco AnyConnect VPN Agent for Windows" --header "$ANYCONNECT_PLATFORM_HEADER" --silent --insecure https://$ADDRESS:$PORT/1/VPNManifest.xml --output $MANIFEST ) ||
+	fail $PID "manifest request failed"
+
+grep -q 'version="4.10.07062"' $MANIFEST || {
+	cat $MANIFEST >&2
+	fail $PID "latest Windows version was not selected"
+}
+grep -q 'anyconnect-win-4.10.07062-core-vpn-webdeploy-k9.pkg' $MANIFEST || fail $PID "latest Windows package is missing"
+grep -q 'anyconnect-win-4.10.00093-core-vpn-webdeploy-k9.pkg' $MANIFEST && fail $PID "old Windows package was advertised"
+grep -q 'anyconnect-linux64-4.9.06037-core-vpn-webdeploy-k9.pkg' $MANIFEST && fail $PID "package for another platform was advertised"
+
+( LD_PRELOAD=libsocket_wrapper.so curl --user-agent "Cisco AnyConnect VPN Agent for Windows" --header "$ANYCONNECT_PLATFORM_HEADER" --silent --insecure https://$ADDRESS:$PORT/1/binaries/update.txt --output $UPDATE_TXT ) ||
+	fail $PID "update.txt request failed"
+
+grep -q '^4,10,07062$' $UPDATE_TXT || {
+	cat $UPDATE_TXT >&2
+	fail $PID "latest Windows version was not reported"
+}
+
+( LD_PRELOAD=libsocket_wrapper.so curl --user-agent "AnyConnect Darwin_i386 5.1.14.145" --header "$MACOS_PLATFORM_HEADER" --silent --insecure https://$ADDRESS:$PORT/1/VPNManifest.xml --output $MACOS_MANIFEST ) ||
+	fail $PID "macOS manifest request failed"
+
+grep -q 'version="5.1.15.287"' $MACOS_MANIFEST || {
+	cat $MACOS_MANIFEST >&2
+	fail $PID "latest macOS version was not selected"
+}
+grep -q 'cisco-secure-client-macos-5.1.15.287-core-vpn-webdeploy-k9.dmg' $MACOS_MANIFEST || fail $PID "latest macOS package is missing"
+grep -q 'os="macos:11.0"' $MACOS_MANIFEST || fail $PID "unpacked macOS manifest was not used"
+
+( LD_PRELOAD=libsocket_wrapper.so curl --user-agent "AnyConnect Darwin_i386 5.1.14.145" --header "$MACOS_PLATFORM_HEADER" --silent --insecure https://$ADDRESS:$PORT/1/binaries/update.txt --output $MACOS_UPDATE_TXT ) ||
+	fail $PID "macOS update.txt request failed"
+
+grep -q '^5,1,15,287$' $MACOS_UPDATE_TXT || {
+	cat $MACOS_UPDATE_TXT >&2
+	fail $PID "latest macOS version was not reported"
+}
+
+( LD_PRELOAD=libsocket_wrapper.so curl --user-agent "AnyConnect Downloader Darwin_i386 5.1.14.145" --header "$HOST_HEADER" --header "$MACOS_PLATFORM_HEADER" --silent --insecure https://$ADDRESS:$PORT/1/binaries/vpndownloader.sh --output $DOWNLOADER ) ||
+	fail $PID "downloader request failed"
+
+grep -q 'static macOS downloader' $DOWNLOADER || {
+	cat $DOWNLOADER >&2
+	fail $PID "unpacked macOS downloader was not used"
+}
+
+( LD_PRELOAD=libsocket_wrapper.so curl --user-agent "AnyConnect Downloader Darwin_i386 5.1.15.287" --header "$MACOS_PLATFORM_HEADER" --silent --insecure https://$ADDRESS:$PORT/1/VPNManifest.xml --output $MACOS_DOWNLOADER_MANIFEST ) ||
+	fail $PID "downloader manifest request failed"
+
+grep -q 'cisco-secure-client-macos-5.1.15.287-core-vpn-webdeploy-k9.dmg' $MACOS_DOWNLOADER_MANIFEST || fail $PID "downloader did not receive unpacked macOS manifest"
+
+( LD_PRELOAD=libsocket_wrapper.so curl --user-agent "AnyConnect Downloader Darwin_i386 5.1.15.287" --header "$MACOS_PLATFORM_HEADER" --silent --insecure https://$ADDRESS:$PORT/1/VPNHashManifest.xml --output $MACOS_HASH_MANIFEST ) ||
+	fail $PID "hash manifest request failed"
+
+grep -q '0123456789ABCDEF' $MACOS_HASH_MANIFEST || fail $PID "downloader did not receive unpacked hash manifest"
+
+( LD_PRELOAD=libsocket_wrapper.so curl --user-agent "AnyConnect Downloader Darwin_i386 5.1.15.287" --header "$MACOS_PLATFORM_HEADER" --silent --insecure https://$ADDRESS:$PORT/1/binaries/cisco-secure-client-macos-5.1.15.287-core-vpn-webdeploy-k9.dmg --output $DOWNLOAD ) ||
+	fail $PID "macOS payload download failed"
+
+grep -q '^macos-dmg$' $DOWNLOAD || fail $PID "macOS payload was not served from unpacked webdeploy directory"
+
+( LD_PRELOAD=libsocket_wrapper.so curl --user-agent "AnyConnect Downloader Darwin_i386 5.1.15.287" --header "$MACOS_PLATFORM_HEADER" --silent --insecure https://$ADDRESS:$PORT/1/binaries/anyconnect-ise-network-assistant-macos-5.1.15.287.dmg --output $DOWNLOAD ) ||
+	fail $PID "macOS non-webdeploy payload download failed"
+
+grep -q '^macos-dmg-no-webdeploy$' $DOWNLOAD || fail $PID "macOS non-webdeploy payload was not served from unpacked webdeploy directory"
+
+( LD_PRELOAD=libsocket_wrapper.so curl --user-agent "AnyConnect Darwin_i386 5.1.14.145" --header "$MACOS_PLATFORM_HEADER" --silent --insecure https://$ADDRESS:$PORT/1/Darwin_i386 --output $MACOS_PLATFORM ) ||
+	fail $PID "macOS platform marker request failed"
+
+test ! -s $MACOS_PLATFORM || fail $PID "macOS platform marker was not empty"
+
+( LD_PRELOAD=libsocket_wrapper.so curl --user-agent "AnyConnect Darwin_i386 5.1.15.287" --header "$MACOS_PLATFORM_HEADER" --silent --insecure https://$ADDRESS:$PORT/1/VPNManifest.xml --output $MACOS_CURRENT_MANIFEST ) ||
+	fail $PID "current macOS manifest request failed"
+
+grep -q '<file ' $MACOS_CURRENT_MANIFEST && fail $PID "current macOS client received updates"
+
+( LD_PRELOAD=libsocket_wrapper.so curl --user-agent "AnyConnect Darwin_i386 5.1.15.287" --header "$MACOS_PLATFORM_HEADER" --silent --insecure https://$ADDRESS:$PORT/1/binaries/update.txt --output $MACOS_CURRENT_UPDATE_TXT ) ||
+	fail $PID "current macOS update.txt request failed"
+
+grep -q '^5,1,15,287$' $MACOS_CURRENT_UPDATE_TXT || {
+	cat $MACOS_CURRENT_UPDATE_TXT >&2
+	fail $PID "current macOS client version was not preserved"
+}
+
+( LD_PRELOAD=libsocket_wrapper.so curl --user-agent "AnyConnect Linux_ARM64 5.1.14.145" --header "$LINUX_ARM64_PLATFORM_HEADER" --silent --insecure https://$ADDRESS:$PORT/1/binaries/update.txt --output $LINUX_ARM64_UPDATE_TXT ) ||
+	fail $PID "Linux ARM64 update.txt request failed"
+
+grep -q '^5,1,15,287$' $LINUX_ARM64_UPDATE_TXT || {
+	cat $LINUX_ARM64_UPDATE_TXT >&2
+	fail $PID "latest Linux ARM64 version was not reported"
+}
+
+( LD_PRELOAD=libsocket_wrapper.so curl --user-agent "AnyConnect-compatible OpenConnect" --silent --insecure https://$ADDRESS:$PORT/1/VPNManifest.xml --output $EMPTY_MANIFEST ) ||
+	fail $PID "OpenConnect manifest request failed"
+
+grep -q '<file ' $EMPTY_MANIFEST && fail $PID "non-Cisco compatible client received updates"
+
+( LD_PRELOAD=libsocket_wrapper.so curl --user-agent "AnyConnect-compatible OpenConnect" --silent --insecure https://$ADDRESS:$PORT/1/binaries/update.txt --output $EMPTY_UPDATE_TXT ) ||
+	fail $PID "OpenConnect update.txt request failed"
+
+grep -q '^0,0,0000$' $EMPTY_UPDATE_TXT || fail $PID "non-Cisco compatible client received update version"
+
+( LD_PRELOAD=libsocket_wrapper.so curl --user-agent "Cisco AnyConnect VPN Agent for Windows" --header "$ANYCONNECT_PLATFORM_HEADER" --silent --insecure https://$ADDRESS:$PORT/1/binaries/anyconnect-win-4.10.07062-core-vpn-webdeploy-k9.pkg --output $DOWNLOAD ) ||
+	fail $PID "package download failed"
+
+grep -q '^new$' $DOWNLOAD || fail $PID "downloaded package contents mismatch"
+
+if ! test -f ${PIDFILE};then
+	fail $PID "Could not find pid file ${PIDFILE}"
+fi
+
+cleanup
+
+rm -rf "${UPDATE_ROOT}"
+rm -f "$MANIFEST" "$MACOS_MANIFEST" "$MACOS_CURRENT_MANIFEST" "$MACOS_DOWNLOADER_MANIFEST" "$MACOS_HASH_MANIFEST" "$MACOS_PLATFORM" "$EMPTY_MANIFEST" "$UPDATE_TXT" "$MACOS_UPDATE_TXT" "$MACOS_CURRENT_UPDATE_TXT" "$LINUX_ARM64_UPDATE_TXT" "$EMPTY_UPDATE_TXT" "$DOWNLOAD" "$DOWNLOADER"
+
+exit 0

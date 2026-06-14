@@ -150,6 +150,10 @@ if have_cwrap
     'test-secmod-kill', 'test-syslog-facility',
   ]
 
+  if get_option('anyconnect-compat').enabled()
+    cwrap_scripts += ['test-anyconnect-updates']
+  endif
+
   if have_cwrap_all
     cwrap_scripts += ['test-vhost']
   endif
