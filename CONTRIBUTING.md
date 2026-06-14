@@ -47,7 +47,7 @@ $ git config commit.template ~/.git-template
 
    New functionality should be accompanied by a test case which verifies
 the correctness of ocserv operation on successful use of the new
-functionality, as well as on fail cases. The test suite is run on "make check"
+functionality, as well as on fail cases. The test suite is run on "meson test -C build"
 on every system ocserv is installed, except for the tests/suite part
 which is only run during development.
 
