@@ -465,7 +465,6 @@ static void stats_add_to(stats_st *dst, stats_st *src1, stats_st *src2)
 {
 	dst->bytes_out = src1->bytes_out + src2->bytes_out;
 	dst->bytes_in = src1->bytes_in + src2->bytes_in;
-	dst->uptime = src1->uptime + src2->uptime;
 }
 
 static int send_failed_session_open_reply(sec_mod_st *sec, int fd)
@@ -654,9 +653,11 @@ int handle_secm_session_close_cmd(sec_mod_st *sec, int fd,
 				(pack_func)cli_stats_msg__pack);
 	}
 
-	if (req->has_uptime && req->uptime > e->stats.uptime) {
-		e->stats.uptime = req->uptime;
-	}
+	/* Acct-Session-Time is the wall-clock lifetime of the logical session
+	 * (now - e->created). Snapshot it at disconnect so the Stop does not
+	 * also count the cookie-timeout period during which the session lingers
+	 * with no connected worker. */
+	e->acct_info.uptime = time(NULL) - e->created;
 	if (req->has_bytes_in && req->bytes_in > e->stats.bytes_in) {
 		e->stats.bytes_in = req->bytes_in;
 	}
@@ -744,8 +745,6 @@ int handle_sec_auth_stats_cmd(sec_mod_st *sec, const CliStatsMsg *req,
 		e->stats.bytes_in = req->bytes_in;
 	if (req->bytes_out > e->stats.bytes_out)
 		e->stats.bytes_out = req->bytes_out;
-	if (req->uptime > e->stats.uptime)
-		e->stats.uptime = req->uptime;
 
 	if (req->has_discon_reason && req->discon_reason != 0) {
 		e->discon_reason = req->discon_reason;
@@ -768,6 +767,9 @@ int handle_sec_auth_stats_cmd(sec_mod_st *sec, const CliStatsMsg *req,
 	if (req->ipv6)
 		strlcpy(e->acct_info.ipv6, req->ipv6,
 			sizeof(e->acct_info.ipv6));
+
+	/* live wall-clock session lifetime for this interim update */
+	e->acct_info.uptime = time(NULL) - e->created;
 
 	e->vhost->static_config.acct.amod->session_stats(
 		e->vhost_acct_ctx, e->auth_type, &e->acct_info, &totals);

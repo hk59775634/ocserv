@@ -88,12 +88,13 @@ static void acct_radius_vhost_deinit(void *_vctx)
 		rc_destroy(vctx->rh);
 }
 
-static void append_stats(rc_handle *rh, VALUE_PAIR **send, stats_st *stats)
+static void append_stats(rc_handle *rh, VALUE_PAIR **send, stats_st *stats,
+			 time_t uptime)
 {
 	uint32_t uin, uout;
 
-	if (stats->uptime) {
-		uin = (uint32_t)MIN(stats->uptime, UINT32_MAX);
+	if (uptime) {
+		uin = (uint32_t)MIN(uptime, UINT32_MAX);
 		rc_avpair_add(rh, send, PW_ACCT_SESSION_TIME, &uin, -1, 0);
 	}
 
@@ -194,7 +195,7 @@ static void radius_acct_session_stats(void *_vctx, unsigned int auth_method,
 	}
 
 	append_acct_standard(vctx, vctx->rh, ai, &send);
-	append_stats(vctx->rh, &send, stats);
+	append_stats(vctx->rh, &send, stats, ai->uptime);
 
 	ret = rc_aaa(vctx->rh, 0, send, &recvd, NULL, 0, PW_ACCOUNTING_REQUEST);
 
@@ -294,7 +295,7 @@ static void radius_acct_close_session(void *_vctx, unsigned int auth_method,
 	rc_avpair_add(vctx->rh, &send, PW_ACCT_TERMINATE_CAUSE, &ret, -1, 0);
 
 	append_acct_standard(vctx, vctx->rh, ai, &send);
-	append_stats(vctx->rh, &send, stats);
+	append_stats(vctx->rh, &send, stats, ai->uptime);
 
 	ret = rc_aaa(vctx->rh, 0, send, &recvd, NULL, 0, PW_ACCOUNTING_REQUEST);
 	if (recvd != NULL)

@@ -56,7 +56,6 @@ typedef struct sec_mod_st {
 typedef struct stats_st {
 	uint64_t bytes_in;
 	uint64_t bytes_out;
-	time_t uptime;
 } stats_st;
 
 typedef struct common_auth_init_st {
@@ -79,6 +78,10 @@ typedef struct common_acct_info_st {
 	char ipv4[MAX_IP_STR];
 	char ipv6[MAX_IP_STR];
 	unsigned int id;
+	/* Wall-clock lifetime of the logical session in seconds (now -
+	 * client-entry creation time), computed by sec-mod when an accounting
+	 * record is emitted. For the Stop it is snapshotted at disconnect. */
+	time_t uptime;
 } common_acct_info_st;
 
 #define IS_CLIENT_ENTRY_EXPIRED_FULL(sec, e, now, clean) \

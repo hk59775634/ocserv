@@ -66,6 +66,16 @@ possible when the user disconnects explicitly. When the disconnection
 is due to timeout or other network reasons, the users have their connection
 remain valid until the `cookie-timeout` value expires.
 
+The `Acct-Session-Time` reported is the wall-clock lifetime of the logical
+session: the time from the initial authentication to the last activity of
+the session. A single logical session spans all reconnections performed
+under the same cookie (e.g. roaming, DTLS rekey, or a brief link loss), so
+an idle gap between such reconnections is included in `Acct-Session-Time`.
+The value is bounded by `session-timeout` (the session is torn down once it
+is reached), and any idle gap that can be folded in is bounded by
+`cookie-timeout`, after which a fresh authentication starts a new accounting
+session.
+
 
 Dictionary
 ==========
