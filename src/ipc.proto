@@ -137,7 +137,9 @@ message cli_stats_msg
 	required uint64 bytes_in = 1;
 	required uint64 bytes_out = 2;
 	optional bytes sid = 3;
-	required int64 uptime = 4;
+	/* field 4 (uptime) removed: session uptime is derived from the
+	 * session creation time in sec-mod, not reported by the worker */
+	reserved 4;
 	optional string remote_ip = 5;
 	optional string ipv4 = 6;
 	optional string ipv6 = 7;
@@ -320,7 +322,9 @@ message secm_session_open_msg
 message secm_session_close_msg
 {
 	required bytes sid = 1; /* cookie */
-	optional int64 uptime = 3;
+	/* field 3 (uptime) removed: session uptime is derived from the
+	 * session creation time in sec-mod, not reported by main */
+	reserved 3;
 	optional uint64 bytes_in = 4;
 	optional uint64 bytes_out = 5;
 	optional string ipv4 = 6;

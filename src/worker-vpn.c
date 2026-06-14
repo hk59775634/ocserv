@@ -41,12 +41,14 @@ static inline void worker_exit(int status)
 #include <inttypes.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <assert.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <assert.h>
 #include <limits.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -546,7 +548,6 @@ static void send_stats_to_secmod(worker_st *ws, time_t now,
 
 		msg.bytes_in = ws->tun_bytes_in;
 		msg.bytes_out = ws->tun_bytes_out;
-		msg.uptime = now - ws->session_start_time;
 		msg.sid.len = sizeof(ws->sid);
 		msg.sid.data = ws->sid;
 		msg.has_sid = 1;
@@ -1166,7 +1167,8 @@ static void session_info_send(worker_st *ws)
 static void link_mtu_set(struct worker_st *ws, struct dtls_st *dtls,
 			 unsigned int mtu)
 {
-	if (ws->link_mtu == mtu || mtu > sizeof(ws->buffer))
+	if (ws->link_mtu == mtu || mtu > sizeof(ws->buffer) ||
+	    mtu < MIN_MTU(ws))
 		return;
 
 	ws->link_mtu = mtu;
@@ -2168,18 +2170,29 @@ static int connect_handler(worker_st *ws)
 		ws->vinfo.mtu = ws->user_config->mtu;
 	oclog(ws, LOG_INFO, "configured link MTU is %u", ws->vinfo.mtu);
 
-	if (req->link_mtu > 0) {
+	if (req->link_mtu >= MIN_MTU(ws)) {
 		oclog(ws, LOG_INFO, "peer's link MTU is %u", req->link_mtu);
 		ws->vinfo.mtu = MIN(ws->vinfo.mtu, req->link_mtu);
+	} else if (req->link_mtu > 0) {
+		oclog(ws, LOG_INFO,
+		      "ignoring peer's link MTU %u (below minimum %u)",
+		      req->link_mtu, MIN_MTU(ws));
 	} else if (req->tunnel_mtu > 0) {
 		/* Old clients didn't send their link MTU, they send the plaintext MTU
 		 * they can transfer. */
-		ws->vinfo.mtu =
-			MIN(ws->vinfo.mtu, req->tunnel_mtu +
-						   MAX_DTLS_PROTO_OVERHEAD(ws) +
-						   MAX_DTLS_CRYPTO_OVERHEAD);
-		oclog(ws, LOG_INFO, "peer's data MTU is %u / link is %u",
-		      req->tunnel_mtu, ws->vinfo.mtu);
+		unsigned int lmtu = req->tunnel_mtu +
+				    MAX_DTLS_PROTO_OVERHEAD(ws) +
+				    MAX_DTLS_CRYPTO_OVERHEAD;
+		if (lmtu >= MIN_MTU(ws)) {
+			ws->vinfo.mtu = MIN(ws->vinfo.mtu, lmtu);
+			oclog(ws, LOG_INFO,
+			      "peer's data MTU is %u / link is %u",
+			      req->tunnel_mtu, ws->vinfo.mtu);
+		} else {
+			oclog(ws, LOG_INFO,
+			      "ignoring peer's tunnel MTU %u (back-computed link MTU %u below minimum %u)",
+			      req->tunnel_mtu, lmtu, MIN_MTU(ws));
+		}
 	}
 
 	/* Attempt to use the TCP connection maximum segment size to set a more
@@ -2194,6 +2207,12 @@ static int connect_handler(worker_st *ws)
 	}
 
 	calc_mtu_values(ws);
+
+	/* Invariant: MIN_MTU must always exceed the computed DTLS overhead so
+	 * that DATA_MTU() cannot underflow.  Fires in CI if a new cipher or
+	 * protocol addition erodes the margin. */
+	assert(MIN_MTU(ws) >
+	       ws->dtls_crypto_overhead + ws->dtls_proto_overhead);
 
 	if (DATA_MTU(ws, ws->link_mtu) < 1280 && ws->vinfo.ipv6 &&
 	    req->no_ipv6 == 0) {
@@ -2678,6 +2697,9 @@ static int parse_data(struct worker_st *ws, uint8_t *buf, size_t buf_size,
 		head = buf[0];
 	}
 
+	/* Caller ensures there is enough data */
+	assert(plain_size >= 0);
+
 	switch (head) {
 	case AC_PKT_DPD_RESP:
 		oclog(ws, LOG_TRANSFER_DEBUG, "received DPD response");
@@ -2760,6 +2782,11 @@ static int parse_data(struct worker_st *ws, uint8_t *buf, size_t buf_size,
 		exit_worker_reason(ws, REASON_TEMP_DISCONNECT);
 
 	case AC_PKT_COMPRESSED:
+		if (plain_size == 0) {
+			oclog(ws, LOG_TRANSFER_DEBUG, "received empty packet");
+			return 0;
+		}
+
 		/* decompress */
 		if (is_dtls == 0) { /* CSTP */
 			if (ws->cstp_selected_comp == NULL) {
@@ -2795,6 +2822,11 @@ static int parse_data(struct worker_st *ws, uint8_t *buf, size_t buf_size,
 		plain = ws->decomp;
 		/* fall through */
 	case AC_PKT_DATA:
+		if (plain_size == 0) {
+			oclog(ws, LOG_TRANSFER_DEBUG, "received empty packet");
+			return 0;
+		}
+
 		oclog(ws, LOG_TRANSFER_DEBUG, "writing %zd byte(s) to TUN",
 		      plain_size);
 

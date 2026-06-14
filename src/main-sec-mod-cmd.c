@@ -744,8 +744,6 @@ int session_close(sec_mod_instance_st *sec_mod_instance, struct proc_st *proc)
 
 	PROTOBUF_ALLOCATOR(pa, proc);
 
-	ireq.uptime = time(NULL) - proc->conn_time;
-	ireq.has_uptime = 1;
 	ireq.bytes_in = proc->bytes_in;
 	ireq.has_bytes_in = 1;
 	ireq.bytes_out = proc->bytes_out;
