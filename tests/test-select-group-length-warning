@@ -1,0 +1,74 @@
+#!/bin/bash
+#
+# Copyright (C) 2026 Nikos Mavrogiannopoulos
+#
+# This file is part of ocserv.
+#
+# ocserv is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at
+# your option) any later version.
+#
+# ocserv is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with GnuTLS; if not, write to the Free Software Foundation,
+# Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+
+SERV="${SERV:-../src/ocserv}"
+srcdir=${srcdir:-.}
+NO_NEED_ROOT=1
+OUTFILE=$(mktemp)
+
+. `dirname $0`/common.sh
+
+eval "${GETPORT}"
+
+echo "Testing select-group length validation at config load... "
+
+function finish {
+  set +e
+  test -n "${CONFIG}" && rm -f ${CONFIG} >/dev/null 2>&1
+  rm -f $OUTFILE >/dev/null 2>&1
+}
+trap finish EXIT
+
+# A select-group entry that is too long to ever fit in the worker's
+# fixed-size groupname buffer (MAX_GROUPNAME_SIZE == 64, i.e. 63 usable
+# characters) can never be matched by a client. The server must warn
+# about it at config-load time.
+update_config test-group-cert.config
+echo 'select-group = "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789AB"' >>${CONFIG}
+
+${SERV} -d 1 -c ${CONFIG} -t >${OUTFILE} 2>&1
+
+grep -q "select-group' entry .* exceeds the maximum supported group name length" $OUTFILE
+if test $? != 0; then
+	echo "Server did not warn about an oversized select-group entry"
+	echo "==========================================================="
+	cat $OUTFILE
+	exit 1
+fi
+
+echo " * OK: oversized select-group entry triggers a warning"
+
+# A select-group entry that fits must not trigger the warning.
+update_config test-group-cert.config
+echo 'select-group = "shortgroup"' >>${CONFIG}
+
+${SERV} -d 1 -c ${CONFIG} -t >${OUTFILE} 2>&1
+
+grep -q "exceeds the maximum supported group name length" $OUTFILE
+if test $? = 0; then
+	echo "Server unexpectedly warned about a normal-sized select-group entry"
+	echo "===================================================================="
+	cat $OUTFILE
+	exit 1
+fi
+
+echo " * OK: normal-sized select-group entry does not trigger the warning"
+
+exit 0
