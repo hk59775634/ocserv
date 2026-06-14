@@ -173,4 +173,31 @@ if test $? != 0;then
 	exit 1
 fi
 
+test -n "${CLIPID}" && kill $(cat ${CLIPID}) >/dev/null 2>&1
+sleep 2
+
+# A group name containing a path-traversal sequence must not be used to
+# escape config-per-group (REQ-CONFIG-CFG-006); get_sup_config() must reject
+# it and the session must fail to open entirely.
+USERNAME=test6
+PASSWORD=test
+echo " * Connecting with user whose group is a path-traversal sequence (must fail)..."
+rm -f ${CLIPID}
+( echo "${PASSWORD}" | ${CMDNS1} ${OPENCONNECT} ${ADDRESS}:${PORT} -u ${USERNAME} --servercert=pin-sha256:xp3scfzy3rOQsv9NcOve/8YVVv+pHr4qNCXEXrNl5s8= -s ${srcdir}/scripts/vpnc-script --pid-file=${CLIPID} --passwd-on-stdin -b )
+if test $? = 0;then
+	echo "FAIL: connection with a path-traversal group name ('../escape') unexpectedly succeeded"
+	exit 1
+fi
+
+if test -f "${CLIPID}";then
+	echo "FAIL: a client process was left running despite the rejected session"
+	exit 1
+fi
+
+${OCCTL} -s ${OCCTL_SOCKET} show users|grep ${USERNAME}
+if test $? = 0;then
+	echo "FAIL: occtl shows user '${USERNAME}' as connected despite the rejected session"
+	exit 1
+fi
+
 exit 0

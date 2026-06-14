@@ -1,3 +1,11 @@
+* Version 1.5.1 (unreleased)
+- Hardened per-user/group configuration file lookup against path-traversal;
+  a malformed per-user/group or default configuration file now causes the
+  affected session to be rejected rather than silently ignored. A configured
+  default-user-conf or default-group-conf file that cannot be opened also
+  now causes session rejection (previously silently ignored).
+
+
 * Version 1.5.0 (released 2026-06-07)
 - [SECURITY] Fixed unauthenticated heap buffer overflow in the unprivileged
   worker process via an oversized webvpncontext= cookie value (#719)

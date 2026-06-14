@@ -26,7 +26,6 @@
 #include <pwd.h>
 #include <grp.h>
 #include <fcntl.h>
-#include <limits.h>
 #include "common/common.h"
 #include "ip-util.h"
 #include <ctype.h>
@@ -233,87 +232,137 @@ static int group_cfg_ini_handler(void *_ctx, const char *section,
 	return 1;
 }
 
-/* This will parse the configuration file and append/replace data into
- * config. The provided config must either be memset to zero, or be
- * already allocated using this function.
+/* Returns non-zero if name is safe to use as a single path component
+ * relative to a trusted directory, i.e., it cannot be used to escape
+ * that directory (no '/' and not "." or "..").
  */
-static int parse_group_cfg_file(ReloadableConfig *global_config,
-				SecmSessionReplyMsg *msg, void *pool,
+static int is_safe_path_component(const char *component)
+{
+	if (component[0] == 0 || strcmp(component, ".") == 0 ||
+	    strcmp(component, "..") == 0)
+		return 0;
+	if (strchr(component, '/') != NULL)
+		return 0;
+	return 1;
+}
+
+static int run_group_cfg_sanity_checks(SecmSessionReplyMsg *msg)
+{
+	unsigned int j;
+
+	for (j = 0; j < msg->config->n_routes; j++) {
+		if (ip_route_sanity_check(msg->config->routes,
+					  &msg->config->routes[j]) != 0)
+			return ERR_READ_CONFIG;
+	}
+
+	for (j = 0; j < msg->config->n_iroutes; j++) {
+		if (ip_route_sanity_check(msg->config->iroutes,
+					  &msg->config->iroutes[j]) != 0)
+			return ERR_READ_CONFIG;
+	}
+
+	for (j = 0; j < msg->config->n_no_routes; j++) {
+		if (ip_route_sanity_check(msg->config->no_routes,
+					  &msg->config->no_routes[j]) != 0)
+			return ERR_READ_CONFIG;
+	}
+
+	return 0;
+}
+
+/* This will parse the configuration from 'f' and append/replace data into
+ * config. The provided config must either be memset to zero, or be
+ * already allocated using this function. 'file' is used for logging only.
+ */
+static int parse_group_cfg_file(SecmSessionReplyMsg *msg, void *pool, FILE *f,
 				const char *file)
 {
 	int ret;
-	unsigned int j;
 	struct ini_ctx_st ctx;
 
 	ctx.pool = pool;
 	ctx.msg = msg;
 	ctx.file = file;
 
-	ret = ini_parse(file, group_cfg_ini_handler, &ctx);
+	ret = ini_parse_file(f, group_cfg_ini_handler, &ctx);
 	if (ret != 0) {
 		if (ret > 0)
 			oc_syslog(LOG_ERR, "error in line %d of config file %s",
 				  ret, file);
 		else
 			oc_syslog(LOG_ERR, "cannot load config file %s", file);
-		return 0;
+		return ERR_READ_CONFIG;
 	}
 
-	for (j = 0; j < msg->config->n_routes; j++) {
-		if (ip_route_sanity_check(msg->config->routes,
-					  &msg->config->routes[j]) != 0) {
-			ret = ERR_READ_CONFIG;
-			goto fail;
-		}
-	}
-
-	for (j = 0; j < msg->config->n_iroutes; j++) {
-		if (ip_route_sanity_check(msg->config->iroutes,
-					  &msg->config->iroutes[j]) != 0) {
-			ret = ERR_READ_CONFIG;
-			goto fail;
-		}
-	}
-
-	for (j = 0; j < msg->config->n_no_routes; j++) {
-		if (ip_route_sanity_check(msg->config->no_routes,
-					  &msg->config->no_routes[j]) != 0) {
-			ret = ERR_READ_CONFIG;
-			goto fail;
-		}
-	}
-
-	ret = 0;
-fail:
-
-	return ret;
+	return run_group_cfg_sanity_checks(msg);
 }
 
-static int read_sup_config_file(ReloadableConfig *global_config,
-				SecmSessionReplyMsg *msg, void *pool,
-				const char *file, const char *fallback,
-				const char *type)
+/* Loads the per-user/per-group supplemental configuration file 'name'
+ * (e.g. the client's username or groupname) from 'dir', falling back to
+ * 'fallback' (an administrator-controlled path) when 'dir'/'name' does not
+ * exist. 'name' originates from the authenticated client and is therefore
+ * untrusted: it is rejected outright (no fallback) if it could be used to
+ * escape 'dir', and the file is opened relative to 'dir' via openat() with
+ * O_NOFOLLOW so it can neither traverse out of 'dir' nor follow a symlink.
+ */
+static int read_sup_config_file(SecmSessionReplyMsg *msg, void *pool,
+				const char *dir, const char *name,
+				const char *fallback, const char *type)
 {
-	int ret;
+	int dfd, fd, ret;
+	FILE *f;
 
-	if (access(file, R_OK) == 0) {
-		oc_syslog(LOG_DEBUG, "Loading %s configuration '%s'", type,
-			  file);
+	if (!is_safe_path_component(name)) {
+		oc_syslog(
+			LOG_ERR,
+			"illegal %s name '%s'; refusing to load supplemental configuration",
+			type, name);
+		return ERR_READ_CONFIG;
+	}
 
-		ret = parse_group_cfg_file(global_config, msg, pool, file);
-		if (ret < 0)
-			return ERR_READ_CONFIG;
+	fd = -1;
+	dfd = open(dir, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+	if (dfd < 0) {
+		oc_syslog(LOG_WARNING, "cannot open %s directory '%s'", type,
+			  dir);
 	} else {
-		if (fallback != NULL) {
-			oc_syslog(LOG_DEBUG,
-				  "Loading default %s configuration '%s'", type,
-				  fallback);
+		fd = openat(dfd, name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+		close(dfd);
+	}
 
-			ret = parse_group_cfg_file(global_config, msg, pool,
-						   fallback);
-			if (ret < 0)
-				return ERR_READ_CONFIG;
+	if (fd >= 0) {
+		f = fdopen(fd, "r");
+		if (f == NULL) {
+			oc_syslog(LOG_ERR,
+				  "cannot load %s configuration '%s/%s'", type,
+				  dir, name);
+			close(fd);
+			return ERR_READ_CONFIG;
 		}
+
+		oc_syslog(LOG_DEBUG, "Loading %s configuration '%s/%s'", type,
+			  dir, name);
+
+		ret = parse_group_cfg_file(msg, pool, f, name);
+		fclose(f);
+		return ret;
+	}
+
+	if (fallback != NULL) {
+		f = fopen(fallback, "r");
+		if (f == NULL) {
+			oc_syslog(LOG_ERR, "cannot load %s configuration '%s'",
+				  type, fallback);
+			return ERR_READ_CONFIG;
+		}
+
+		oc_syslog(LOG_DEBUG, "Loading default %s configuration '%s'",
+			  type, fallback);
+
+		ret = parse_group_cfg_file(msg, pool, f, fallback);
+		fclose(f);
+		return ret;
 	}
 
 	return 0;
@@ -322,23 +371,19 @@ static int read_sup_config_file(ReloadableConfig *global_config,
 static int get_sup_config(ReloadableConfig *cfg, client_entry_st *entry,
 			  SecmSessionReplyMsg *msg, void *pool)
 {
-	char file[_POSIX_PATH_MAX];
 	int ret;
 
 	if (cfg->per_group_dir != NULL && entry->acct_info.groupname[0] != 0) {
-		snprintf(file, sizeof(file), "%s/%s", cfg->per_group_dir,
-			 entry->acct_info.groupname);
-
-		ret = read_sup_config_file(cfg, msg, pool, file,
+		ret = read_sup_config_file(msg, pool, cfg->per_group_dir,
+					   entry->acct_info.groupname,
 					   cfg->default_group_conf, "group");
 		if (ret < 0)
 			return ret;
 	}
 
 	if (cfg->per_user_dir != NULL) {
-		snprintf(file, sizeof(file), "%s/%s", cfg->per_user_dir,
-			 entry->acct_info.username);
-		ret = read_sup_config_file(cfg, msg, pool, file,
+		ret = read_sup_config_file(msg, pool, cfg->per_user_dir,
+					   entry->acct_info.username,
 					   cfg->default_user_conf, "user");
 		if (ret < 0)
 			return ret;
