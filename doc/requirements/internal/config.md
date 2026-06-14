@@ -327,7 +327,7 @@ attribute mapping (REQ-AUTH-AUTH-026) are the only contributors to
 `GroupCfgSt`. gitlab!154 (closed, unmerged) sketched a `per-radius-class-dir`
 source for this; see the related limitation note on REQ-AUTH-AUTH-029.]`
 **Links:** REQ-CONFIG-CFG-001, REQ-CONFIG-CFG-005, REQ-AUTH-AUTH-026,
-REQ-AUTH-AUTH-029
+REQ-AUTH-AUTH-029, REQ-CONFIG-SEC-002
 
 ### REQ-CONFIG-CFG-007 — SIGHUP reload replaces each vhost's `ReloadableConfig` via archive-and-reparse (main) or immediate-free-and-reparse (sec-mod); in-flight references are kept alive via an attic + usage-count until drained
 
@@ -401,6 +401,41 @@ descriptors for cert/key/CRL/config files resolve under the snapshot
 directory (e.g. `/proc/<pid>/fd`), not the configured `server-cert`/
 `ocserv.conf` paths.
 **Links:** —
+
+### REQ-CONFIG-SEC-002 — `get_sup_config()` treats `username`/`groupname` as untrusted and cannot be made to read outside `per-user-dir`/`per-group-dir`
+
+**Requirement:** `get_sup_config()` (`src/sup-config/file.c`) MUST NOT build
+the per-user/per-group config path by string concatenation of
+`per_user_dir`/`per_group_dir` with `entry->acct_info.username`/`groupname`
+and hand it to `ini_parse()`. `entry->acct_info.username`/`groupname`
+originate from the authenticated client (certificate CN/SAN, or whatever a
+PAM/RADIUS/plain `auth_group`/`auth_user` callback returns) and are not
+otherwise restricted to safe filename characters. Instead,
+`read_sup_config_file()` MUST: (a) reject `username`/`groupname` outright —
+returning `ERR_READ_CONFIG` with no fallback to `default_user_conf`/
+`default_group_conf` — if the value is empty, is `.` or `..`, or contains
+`/` (`is_safe_path_component()`); and (b) for values that pass (a), resolve
+the file via `openat(dirfd, name, O_NOFOLLOW)` relative to an fd freshly
+opened on `per_user_dir`/`per_group_dir`, never via a concatenated path
+string, so a symlink placed at that name cannot redirect the read. A
+rejection at (a) MUST propagate as a negative return through
+`get_sup_config()` to `handle_secm_session_open_cmd()`, which responds
+`AUTH__REP__FAILED` and fails the session open entirely (no degraded
+fallback) — same as any other `get_sup_config()` error.
+**Strength:** MUST
+**Status:** DERIVED
+**Source:** src/sup-config/file.c (`is_safe_path_component()`,
+`read_sup_config_file()`, `get_sup_config()`); src/sec-mod-auth.c:592-602
+(`handle_secm_session_open_cmd()` failing the session on `ret < 0`)
+**Acceptance:** positive, local — `tests/test-config-per-group`: a user
+whose (default-selected) group is a normal name (`tost`) still has
+`config-per-group/tost` applied (existing DNS/route assertions). Negative,
+local — same test, a second user (`test6`) whose only/default group is
+`../escape` MUST fail to establish a session at all (cookie rejected, no
+client process left running, `occtl show users` does not list it) —
+confirming the traversal name is rejected before any `openat()`/`ini_parse`
+on a path outside `config-per-group/`.
+**Links:** REQ-CONFIG-CFG-006
 
 ---
 
