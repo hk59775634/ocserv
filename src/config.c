@@ -2124,6 +2124,22 @@ static void check_cfg(vhost_cfg_st *vhost, vhost_cfg_st *defvhost,
 	if (config->mobile_dpd == 0)
 		config->mobile_dpd = config->dpd;
 
+	/* select-group entries are matched against group names that are
+	 * stored in fixed-size (MAX_GROUPNAME_SIZE) worker buffers; an entry
+	 * that does not fit can never be selected by a client. */
+	for (j = 0; j < config->n_group_list; j++) {
+		if (config->group_list[j] != NULL &&
+		    strlen(config->group_list[j]) >= MAX_GROUPNAME_SIZE &&
+		    !silent) {
+			fprintf(stderr,
+				WARNSTR
+				"%s'select-group' entry '%s' is %u bytes or longer and exceeds the maximum supported group name length (%u); it can never be selected\n",
+				PREFIX_VHOST(vhost), config->group_list[j],
+				(unsigned int)strlen(config->group_list[j]),
+				(unsigned int)MAX_GROUPNAME_SIZE - 1);
+		}
+	}
+
 	if (config->cisco_client_compat) {
 		if (!config->dtls_legacy && !silent) {
 			fprintf(stderr,
