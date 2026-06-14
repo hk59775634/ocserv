@@ -239,6 +239,50 @@ static int resolve_selected_group(worker_st *ws, const char *group,
 	return 0;
 }
 
+/* If the client did not request a group, but the certificate carries
+ * exactly one group eligible for selection, select it directly into
+ * ws->groupname instead of prompting the client to pick one (#692).
+ *
+ * A certificate group is eligible if no select-group list is configured,
+ * or if it is one of the configured select-group entries. Returns 1 and
+ * sets ws->groupname if exactly one eligible group was found, otherwise
+ * returns 0 and leaves ws->groupname untouched.
+ */
+static int auto_select_cert_group(worker_st *ws)
+{
+	unsigned int i, j;
+	const char *candidate = NULL;
+
+	for (i = 0; i < ws->cert_groups_size; i++) {
+		if (WSRCONFIG(ws)->n_group_list > 0) {
+			unsigned int found = 0;
+
+			for (j = 0; j < WSRCONFIG(ws)->n_group_list; j++) {
+				if (strcmp(ws->cert_groups[i],
+					   WSRCONFIG(ws)->group_list[j]) == 0) {
+					found = 1;
+					break;
+				}
+			}
+
+			if (!found)
+				continue;
+		}
+
+		if (candidate != NULL &&
+		    strcmp(candidate, ws->cert_groups[i]) != 0)
+			return 0;
+
+		candidate = ws->cert_groups[i];
+	}
+
+	if (candidate == NULL)
+		return 0;
+
+	strlcpy(ws->groupname, candidate, sizeof(ws->groupname));
+	return 1;
+}
+
 int get_auth_handler2(worker_st *ws, unsigned int http_ver, const char *pmsg,
 		      unsigned int pcounter)
 {
@@ -1730,11 +1774,18 @@ int post_auth_handler(worker_st *ws, unsigned int http_ver)
 			if (def_group == 0 && ws->cert_groups_size > 0 &&
 			    ws->groupname[0] == 0 &&
 			    unlisted_groupname[0] == 0) {
+				if (auto_select_cert_group(ws) == 0) {
+					oclog(ws, LOG_HTTP_DEBUG,
+					      "user has not selected a group");
+					return get_auth_handler2(
+						ws, http_ver,
+						"Please select your group.", 0);
+				}
+
 				oclog(ws, LOG_HTTP_DEBUG,
-				      "user has not selected a group");
-				return get_auth_handler2(
-					ws, http_ver,
-					"Please select your group.", 0);
+				      "auto-selected certificate group '%s'",
+				      ws->groupname);
+				ireq.group_name = ws->groupname;
 			}
 
 			ireq.tls_auth_ok = ws->cert_auth_ok;
