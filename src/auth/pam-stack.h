@@ -31,12 +31,12 @@
  * (#619, #657).  The actual size is read from RLIMIT_STACK at runtime. */
 #define MIN_PAM_STACK_SIZE (8 * 1024 * 1024)
 
-struct pam_stack_st {
+typedef struct pam_stack_st {
 	void *base; /* mmap base (Linux) or malloc'd pointer */
 #ifdef __linux__
 	size_t total; /* total mmap size: guard page + usable area */
 #endif
-};
+} pam_stack_st;
 
 /* Returns the coroutine stack size: RLIMIT_STACK if it is finite and at
  * least MIN_PAM_STACK_SIZE, otherwise MIN_PAM_STACK_SIZE. */
