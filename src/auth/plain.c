@@ -51,6 +51,7 @@ struct plain_ctx_st {
 
 	char *groupnames[MAX_GROUPS];
 	unsigned int groupnames_size;
+	unsigned int all_groups;
 
 	const char *pass_msg;
 	unsigned int retries;
@@ -76,6 +77,33 @@ static void plain_vhost_init(void **vctx, void *pool, void *additional)
 #ifdef HAVE_LIBOATH
 	oath_init();
 #endif
+}
+
+static unsigned int group_list_allows_all(const char *text)
+{
+	const char *p = text;
+	const char *end;
+	size_t len;
+
+	while (*p != 0) {
+		while (isspace((unsigned char)*p) || *p == ',')
+			p++;
+
+		len = 0;
+		while (p[len] != 0 && p[len] != ',')
+			len++;
+
+		end = p + len;
+		while (end > p && isspace((unsigned char)end[-1]))
+			end--;
+
+		if (end - p == 1 && *p == '*')
+			return 1;
+
+		p += len;
+	}
+
+	return 0;
 }
 
 /* Breaks a list of "xxx", "yyy", to a character array, of
@@ -183,6 +211,9 @@ static int read_auth_pass(struct plain_ctx_st *pctx)
 		if (p != NULL && strcmp(pctx->username, p) == 0) {
 			p = strsep(&sp, ":");
 			if (p != NULL) {
+				if (group_list_allows_all(p))
+					pctx->all_groups = 1;
+
 				break_group_list(pctx, p, pctx->groupnames,
 						 &pctx->groupnames_size);
 
@@ -265,12 +296,18 @@ static int plain_auth_group(void *ctx, const char *suggested, char *groupname,
 	groupname[0] = 0;
 
 	if (suggested != NULL) {
-		for (i = 0; i < pctx->groupnames_size; i++) {
-			if (strcmp(suggested, pctx->groupnames[i]) == 0) {
-				strlcpy(groupname, pctx->groupnames[i],
-					groupname_size);
-				found = 1;
-				break;
+		if (pctx->all_groups && suggested[0] != 0) {
+			strlcpy(groupname, suggested, groupname_size);
+			found = 1;
+		} else {
+			for (i = 0; i < pctx->groupnames_size; i++) {
+				if (strcmp(suggested, pctx->groupnames[i]) ==
+				    0) {
+					strlcpy(groupname, pctx->groupnames[i],
+						groupname_size);
+					found = 1;
+					break;
+				}
 			}
 		}
 

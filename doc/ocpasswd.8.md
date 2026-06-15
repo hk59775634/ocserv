@@ -14,8 +14,9 @@ and handling of a 'plain' password file used by ocserv.
     location. The default is _/etc/ocserv/ocpasswd_.
 
   * **-g, --group**:
-    Specify the user's group name. Note that groups of one character such as
-    '*' and 'x', are ignored.
+    Specify the user's group name. The special group '*' allows a user
+    authenticated by the plain backend to select any group. Other groups of one
+    character, such as 'x', are ignored.
 
   * **-d, --delete**:
     Deletes the specified user from the password file.
