@@ -1084,6 +1084,7 @@ static void reload_sig_watcher_cb(struct ev_loop *loop, ev_signal *w,
 		ret = secmod_reload(&s->sec_mod_instances[i]);
 		if (ret < 0) {
 			mslog(s, NULL, LOG_ERR, "could not reload sec-mod!");
+			s->abnormal_exit = 1;
 			ev_feed_signal_event(loop, SIGTERM);
 		}
 	}
@@ -1387,6 +1388,7 @@ static void sec_mod_watcher_cb(EV_P_ ev_io *w, int revents)
 	if (ret < 0) { /* bad commands from sec-mod are unacceptable */
 		mslog(s, NULL, LOG_ERR, "error in command from sec-mod");
 		ev_io_stop(loop, w);
+		s->abnormal_exit = 1;
 		ev_feed_signal_event(loop, SIGTERM);
 	}
 }
@@ -1810,13 +1812,19 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "cannot close listen namespaces\n");
 		exit(EXIT_FAILURE);
 	}
+
+	if (s->abnormal_exit) {
+		fprintf(stderr, "error detected\n");
+		exit(EXIT_FAILURE);
+	}
+
 	clear_lists(s);
 	clear_vhosts(s->vconfig);
 	talloc_free(s->config_pool);
 	talloc_free(s->main_pool);
 	closelog();
 
-	return s->abnormal_exit ? EXIT_FAILURE : 0;
+	return 0;
 }
 
 extern char **pam_auth_group_list;
