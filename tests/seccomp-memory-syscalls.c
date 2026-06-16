@@ -15,6 +15,11 @@ int main(void)
 {
 	return 77; /* skip on non-Linux */
 }
+#elif defined(__SANITIZE_ADDRESS__)
+int main(void)
+{
+	return 77; /* seccomp filter is intentionally incompatible with ASAN */
+}
 #else
 
 #include <assert.h>
@@ -71,17 +76,18 @@ int main(void)
 	page_size = getpagesize();
 	assert(page_size > 0);
 
-	memset(stack_buf, 0, sizeof(stack_buf));
-
-	if (disable_system_calls((worker_st *)stack_buf) != 0) {
-		fprintf(stderr, "disable_system_calls failed\n");
-		return 1;
-	}
-
 	map = mmap(NULL, (size_t)page_size, PROT_READ | PROT_WRITE,
 		   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	if (map == MAP_FAILED) {
 		perror("mmap");
+		return 1;
+	}
+
+	memset(stack_buf, 0, sizeof(stack_buf));
+
+	if (disable_system_calls((worker_st *)stack_buf) != 0) {
+		fprintf(stderr, "disable_system_calls failed\n");
+		munmap(map, (size_t)page_size);
 		return 1;
 	}
 
