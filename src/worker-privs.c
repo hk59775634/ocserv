@@ -138,6 +138,9 @@ int disable_system_calls(struct worker_st *ws)
 	/* memory allocation - both are used by different platforms */
 	ADD_SYSCALL(brk, 0);
 	ADD_SYSCALL(mmap, 0);
+	ADD_SYSCALL(munmap, 0);
+	ADD_SYSCALL(mremap, 0);
+	ADD_SYSCALL(madvise, 0);
 
 #if defined(SYS_getrandom) || defined(__NR_getrandom)
 	ADD_SYSCALL(getrandom, 0); /* used by gnutls 3.5.x */
