@@ -147,6 +147,12 @@ client has completed gateway authentication and presents a valid webvpn cookie.
 They do not require the VPN tunnel to be fully established, which matches the
 Cisco client web-deploy flow.
 
+This implementation has been validated with a Cisco Secure Client 5.1 web-deploy
+flow that requests the platform marker, `update.txt`, downloader,
+`VPNHashManifest.xml`, and package payload URLs after gateway authentication.
+Advertising update metadata directly in the authentication reply is not part of
+this implementation.
+
 Package filenames must use one of these forms:
 
     anyconnect-<platform>-<version>-<name-containing-webdeploy>.<extension>
@@ -193,6 +199,11 @@ To avoid surprising non-Cisco compatible clients, ocserv only advertises these
 packages to Cisco AnyConnect user-agents. OpenConnect-compatible and other
 non-original clients continue to receive the empty compatibility manifest and
 `0,0,0000` update version.
+
+Use debug logging to troubleshoot update selection. At debug level, ocserv logs
+the detected client platform, the selected update package, whether it came from a
+prepared web-deploy directory or the legacy `1/binaries` fallback, and why no
+update or binary download was offered.
 
 ## VIRTUAL HOSTS
 Ocserv supports virtual hosts, allowing a single instance to serve multiple

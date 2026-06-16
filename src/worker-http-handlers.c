@@ -489,19 +489,6 @@ select_request_platform(worker_st *ws, struct ac_update_st *updates)
 	return NULL;
 }
 
-static bool client_needs_update(worker_st *ws, void *pool,
-				const struct ac_platform_st *platform)
-{
-	char *client_version;
-
-	if (platform == NULL || platform->version == NULL)
-		return false;
-
-	client_version = client_version_from_agent(pool, ws->req.user_agent);
-	return client_version == NULL ||
-	       ac_version_compare(platform->version, client_version) > 0;
-}
-
 static bool request_is_downloader(worker_st *ws)
 {
 	return strstr(ws->req.user_agent, "Downloader") != NULL;
@@ -511,15 +498,43 @@ static const struct ac_platform_st *
 request_update_platform(worker_st *ws, void *pool, struct ac_update_st *updates)
 {
 	const struct ac_platform_st *platform;
+	const char *client_version;
+	const char *source;
 
 	load_anyconnect_updates(pool, updates);
 	platform = select_request_platform(ws, updates);
-	if (platform == NULL || platform->version == NULL)
+	if (platform == NULL) {
+		oclog(ws, LOG_HTTP_DEBUG,
+		      "AnyConnect update: no platform matched user-agent '%s' platform '%s'",
+		      ws->req.user_agent, ws->req.devplatform);
 		return NULL;
+	}
 
-	if (request_is_downloader(ws) ||
-	    client_needs_update(ws, pool, platform))
+	if (platform->version == NULL) {
+		oclog(ws, LOG_HTTP_DEBUG,
+		      "AnyConnect update: no package available for platform %s",
+		      platform->name);
+		return NULL;
+	}
+
+	source = webdeploy_metadata_exists(platform->webdeploy_dir) ?
+			 "prepared webdeploy" :
+			 "legacy binaries";
+	client_version = client_version_from_agent(pool, ws->req.user_agent);
+
+	if (request_is_downloader(ws) || client_version == NULL ||
+	    ac_version_compare(platform->version, client_version) > 0) {
+		oclog(ws, LOG_HTTP_DEBUG,
+		      "AnyConnect update: selected %s %s package %s from %s (client version: %s)",
+		      platform->name, platform->version, platform->filename,
+		      source,
+		      client_version != NULL ? client_version : "unknown");
 		return platform;
+	}
+
+	oclog(ws, LOG_HTTP_DEBUG,
+	      "AnyConnect update: no update offered for %s client version %s (latest: %s)",
+	      platform->name, client_version, platform->version);
 
 	return NULL;
 }
@@ -556,6 +571,9 @@ static int send_platform_webdeploy_file(worker_st *ws, unsigned int http_ver,
 
 	platform = request_update_platform(ws, pool, &updates);
 	if (webdeploy_path(path, sizeof(path), platform, name) < 0) {
+		oclog(ws, LOG_HTTP_DEBUG,
+		      "AnyConnect update: no prepared webdeploy file selected for %s",
+		      name);
 		talloc_free(pool);
 		return 0;
 	}
@@ -868,6 +886,9 @@ int get_anyconnect_binary_handler(worker_st *ws, unsigned int http_ver)
 	    platform->filename == NULL ||
 	    webdeploy_metadata_exists(platform->webdeploy_dir) ||
 	    strcmp(filename, platform->filename) != 0) {
+		oclog(ws, LOG_HTTP_DEBUG,
+		      "AnyConnect update: rejected legacy binary request for %s",
+		      filename);
 		talloc_free(pool);
 		response_404(ws, http_ver);
 		return -1;
