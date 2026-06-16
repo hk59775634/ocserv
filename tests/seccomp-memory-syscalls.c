@@ -15,12 +15,25 @@ int main(void)
 {
 	return 77; /* skip on non-Linux */
 }
+#elif defined(__has_feature)
+# if __has_feature(address_sanitizer)
+int main(void)
+{
+	return 77; /* seccomp filter is intentionally incompatible with ASAN */
+}
+# else
+#define SECCOMP_MEMORY_TEST_ENABLED 1
+# endif
 #elif defined(__SANITIZE_ADDRESS__)
 int main(void)
 {
 	return 77; /* seccomp filter is intentionally incompatible with ASAN */
 }
 #else
+#define SECCOMP_MEMORY_TEST_ENABLED 1
+#endif
+
+#ifdef SECCOMP_MEMORY_TEST_ENABLED
 
 #include <assert.h>
 #include <errno.h>
