@@ -3,10 +3,10 @@
 
 #include <stddef.h>
 
-struct http_headers_st {
+typedef struct http_headers_st {
 	const char *name;
 	unsigned id;
-};
+} http_headers_st;
 
 const struct http_headers_st *in_word_set(const char *str, size_t len);
 
