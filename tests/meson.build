@@ -91,6 +91,16 @@ if pam_dep.found()
     env: test_env, workdir: test_workdir, timeout: 30)
 endif
 
+if seccomp_dep.found()
+  seccomp_memory_syscalls_exe = executable('seccomp-memory-syscalls',
+    ['seccomp-memory-syscalls.c', '../src/worker-privs.c'],
+    dependencies: test_base_deps + [gnutls_dep, libev_dep, seccomp_dep],
+    include_directories: test_inc,
+  )
+  test('seccomp-memory-syscalls', seccomp_memory_syscalls_exe,
+    env: test_env, workdir: test_workdir, timeout: 30)
+endif
+
 # gen_oidc_test_data (only when OIDC enabled)
 if oidc_enabled
   gen_oidc_exe = executable('gen_oidc_test_data', 'generate_oidc_test_data.c',
