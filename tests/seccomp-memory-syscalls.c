@@ -52,6 +52,7 @@ static long checked_syscall(const char *name, long ret)
 int main(void)
 {
 	char stack_buf[8192];
+	long syscall_nr;
 	long ret;
 	void *map;
 	long remapped;
@@ -84,44 +85,41 @@ int main(void)
 		return 1;
 	}
 
-	errno = 0;
-	ret = checked_syscall(
-		"madvise",
-		syscall(
 #ifdef SYS_madvise
-			SYS_madvise,
+	syscall_nr = SYS_madvise;
 #else
-			__NR_madvise,
+	syscall_nr = __NR_madvise;
 #endif
-			map, (size_t)page_size, MADV_DONTNEED));
+	errno = 0;
+	ret = checked_syscall("madvise", syscall(syscall_nr, map,
+						 (size_t)page_size,
+						 MADV_DONTNEED));
 	if (ret < 0 && errno == ENOSYS)
 		return 1;
 
-	errno = 0;
-	remapped = checked_syscall(
-		"mremap",
-		syscall(
 #ifdef SYS_mremap
-			SYS_mremap,
+	syscall_nr = SYS_mremap;
 #else
-			__NR_mremap,
+	syscall_nr = __NR_mremap;
 #endif
-			map, (size_t)page_size, (size_t)page_size, 0));
+	errno = 0;
+	remapped = checked_syscall("mremap",
+				   syscall(syscall_nr, map,
+					   (size_t)page_size,
+					   (size_t)page_size, 0));
 	if (remapped < 0 && errno == ENOSYS)
 		return 1;
 	if (remapped >= 0)
 		map = (void *)remapped;
 
-	errno = 0;
-	ret = checked_syscall(
-		"munmap",
-		syscall(
 #ifdef SYS_munmap
-			SYS_munmap,
+	syscall_nr = SYS_munmap;
 #else
-			__NR_munmap,
+	syscall_nr = __NR_munmap;
 #endif
-			map, (size_t)page_size));
+	errno = 0;
+	ret = checked_syscall("munmap", syscall(syscall_nr, map,
+						(size_t)page_size));
 	if (ret < 0 && errno == ENOSYS)
 		return 1;
 
