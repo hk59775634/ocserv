@@ -155,6 +155,9 @@ grep -q 'static macOS downloader' $DOWNLOADER || {
 	fail $PID "unpacked macOS downloader was not used"
 }
 
+EXE_CODE=$(ac_curl --user-agent "AnyConnect Downloader Darwin_i386 5.1.14.145" --header "$HOST_HEADER" --header "$MACOS_PLATFORM_HEADER" --silent --insecure https://$ADDRESS:$PORT/1/binaries/vpndownloader.exe --output $DOWNLOAD --write-out "%{http_code}" || true)
+test "$EXE_CODE" != "200" || fail $PID "macOS downloader exe request succeeded"
+
 ( ac_curl --user-agent "AnyConnect Downloader Darwin_i386 5.1.15.287" --header "$MACOS_PLATFORM_HEADER" --silent --insecure https://$ADDRESS:$PORT/1/VPNManifest.xml --output $MACOS_DOWNLOADER_MANIFEST ) ||
 	fail $PID "downloader manifest request failed"
 
@@ -215,6 +218,9 @@ grep -q '^0,0,0000$' $EMPTY_UPDATE_TXT || fail $PID "non-Cisco compatible client
 	fail $PID "package download failed"
 
 grep -q '^new$' $DOWNLOAD || fail $PID "downloaded package contents mismatch"
+
+LINUX_CODE=$(ac_curl --user-agent "Cisco AnyConnect VPN Agent for Windows" --header "$ANYCONNECT_PLATFORM_HEADER" --silent --insecure https://$ADDRESS:$PORT/1/binaries/anyconnect-linux64-4.9.06037-core-vpn-webdeploy-k9.pkg --output $DOWNLOAD --write-out "%{http_code}" || true)
+test "$LINUX_CODE" != "200" || fail $PID "Windows client downloaded Linux package by guessed name"
 
 if ! test -f ${PIDFILE};then
 	fail $PID "Could not find pid file ${PIDFILE}"

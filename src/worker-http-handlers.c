@@ -802,28 +802,38 @@ static int send_platform_downloader(worker_st *ws, unsigned int http_ver,
 
 int get_dl_handler(worker_st *ws, unsigned int http_ver)
 {
+	const char *name;
 	int ret;
 
 	oclog(ws, LOG_HTTP_DEBUG, "requested downloader: %s", ws->req.url);
 
 	cookie_authenticate_or_exit(ws);
 
-	ret = send_platform_downloader(ws, http_ver, "vpndownloader.sh");
+	if (!strcmp(ws->req.url, "/1/binaries/vpndownloader.sh")) {
+		name = "vpndownloader.sh";
+	} else if (!strcmp(ws->req.url, "/1/binaries/vpndownloader.exe")) {
+		name = "vpndownloader.exe";
+	} else {
+		response_404(ws, http_ver);
+		return -1;
+	}
+
+	ret = send_platform_downloader(ws, http_ver, name);
 	if (ret != 0)
 		return ret < 0 ? -1 : 0;
 
-	ret = send_platform_downloader(ws, http_ver, "vpndownloader.exe");
-	if (ret != 0)
-		return ret < 0 ? -1 : 0;
+	if (!strcmp(name, "vpndownloader.sh"))
+		return send_data(ws, http_ver, "application/x-shellscript",
+				 "#!/bin/sh\n\nexit 0\n", 18);
 
-	return send_data(ws, http_ver, "application/x-shellscript",
-			 "#!/bin/sh\n\nexit 0\n", 18);
+	response_404(ws, http_ver);
+	return -1;
 }
 
 int get_anyconnect_binary_handler(worker_st *ws, unsigned int http_ver)
 {
 	struct ac_update_st updates;
-	struct ac_platform_st *platform = NULL;
+	const struct ac_platform_st *platform = NULL;
 	const char *filename = ws->req.url + sizeof(AC_BINARIES_URL) - 1;
 	char path[_POSIX_PATH_MAX];
 	struct stat st;
@@ -852,9 +862,12 @@ int get_anyconnect_binary_handler(worker_st *ws, unsigned int http_ver)
 		return ret < 0 ? -1 : 0;
 	}
 
-	if (!valid_webdeploy_filename(filename) ||
-	    parse_package_filename(pool, &updates, filename, &platform) ==
-		    NULL) {
+	load_anyconnect_updates(pool, &updates);
+	platform = select_request_platform(ws, &updates);
+	if (!valid_webdeploy_filename(filename) || platform == NULL ||
+	    platform->filename == NULL ||
+	    webdeploy_metadata_exists(platform->webdeploy_dir) ||
+	    strcmp(filename, platform->filename) != 0) {
 		talloc_free(pool);
 		response_404(ws, http_ver);
 		return -1;
