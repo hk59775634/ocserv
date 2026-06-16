@@ -142,6 +142,11 @@ directory, and generates `/1/binaries/update.txt` from the selected version.
 The `1/binaries` directory remains supported as a fallback for unprepared legacy
 packages.
 
+The update manifest, downloader, and payload URLs are available only after the
+client has completed gateway authentication and presents a valid webvpn cookie.
+They do not require the VPN tunnel to be fully established, which matches the
+Cisco client web-deploy flow.
+
 Package filenames must use one of these forms:
 
     anyconnect-<platform>-<version>-<name-containing-webdeploy>.<extension>

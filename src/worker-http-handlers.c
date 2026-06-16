@@ -737,6 +737,8 @@ int get_string_handler(worker_st *ws, unsigned int http_ver)
 
 	oclog(ws, LOG_HTTP_DEBUG, "requested fixed string: %s", ws->req.url);
 	if (!strcmp(ws->req.url, "/1/binaries/update.txt")) {
+		cookie_authenticate_or_exit(ws);
+
 		if (ws->req.user_agent_type != AGENT_ANYCONNECT)
 			return send_data(ws, http_ver, "text/plain",
 					 VPN_VERSION, sizeof(VPN_VERSION) - 1);
@@ -749,6 +751,8 @@ int get_string_handler(worker_st *ws, unsigned int http_ver)
 	} else if (!strcmp(ws->req.url, "/1/VPNManifest.xml") ||
 		   !strcmp(ws->req.url, "/VPNManifest.xml")) {
 		int ret;
+
+		cookie_authenticate_or_exit(ws);
 
 		if (ws->req.user_agent_type != AGENT_ANYCONNECT)
 			return send_data(ws, http_ver, "text/xml", XML_START,
@@ -765,8 +769,12 @@ int get_string_handler(worker_st *ws, unsigned int http_ver)
 		return send_data(ws, http_ver, "text/xml", data, strlen(data));
 	} else if (!strcmp(ws->req.url, "/1/VPNHashManifest.xml") ||
 		   !strcmp(ws->req.url, "/VPNHashManifest.xml")) {
-		int ret = send_platform_webdeploy_file(ws, http_ver, "text/xml",
-						       "VPNHashManifest.xml");
+		int ret;
+
+		cookie_authenticate_or_exit(ws);
+
+		ret = send_platform_webdeploy_file(ws, http_ver, "text/xml",
+						   "VPNHashManifest.xml");
 		if (ret != 0)
 			return ret < 0 ? -1 : 0;
 
@@ -798,6 +806,8 @@ int get_dl_handler(worker_st *ws, unsigned int http_ver)
 
 	oclog(ws, LOG_HTTP_DEBUG, "requested downloader: %s", ws->req.url);
 
+	cookie_authenticate_or_exit(ws);
+
 	ret = send_platform_downloader(ws, http_ver, "vpndownloader.sh");
 	if (ret != 0)
 		return ret < 0 ? -1 : 0;
@@ -819,6 +829,8 @@ int get_anyconnect_binary_handler(worker_st *ws, unsigned int http_ver)
 	struct stat st;
 	void *pool;
 	int ret;
+
+	cookie_authenticate_or_exit(ws);
 
 	pool = talloc_new(ws);
 	if (pool == NULL)
