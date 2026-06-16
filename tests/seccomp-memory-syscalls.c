@@ -91,9 +91,8 @@ int main(void)
 	syscall_nr = __NR_madvise;
 #endif
 	errno = 0;
-	ret = checked_syscall("madvise", syscall(syscall_nr, map,
-						 (size_t)page_size,
-						 MADV_DONTNEED));
+	ret = syscall(syscall_nr, map, (size_t)page_size, MADV_DONTNEED);
+	ret = checked_syscall("madvise", ret);
 	if (ret < 0 && errno == ENOSYS)
 		return 1;
 
@@ -103,10 +102,9 @@ int main(void)
 	syscall_nr = __NR_mremap;
 #endif
 	errno = 0;
-	remapped = checked_syscall("mremap",
-				   syscall(syscall_nr, map,
-					   (size_t)page_size,
-					   (size_t)page_size, 0));
+	remapped = syscall(syscall_nr, map, (size_t)page_size,
+			   (size_t)page_size, 0);
+	remapped = checked_syscall("mremap", remapped);
 	if (remapped < 0 && errno == ENOSYS)
 		return 1;
 	if (remapped >= 0)
@@ -118,8 +116,8 @@ int main(void)
 	syscall_nr = __NR_munmap;
 #endif
 	errno = 0;
-	ret = checked_syscall("munmap", syscall(syscall_nr, map,
-						(size_t)page_size));
+	ret = syscall(syscall_nr, map, (size_t)page_size);
+	ret = checked_syscall("munmap", ret);
 	if (ret < 0 && errno == ENOSYS)
 		return 1;
 
