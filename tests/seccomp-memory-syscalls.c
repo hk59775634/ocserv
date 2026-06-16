@@ -10,6 +10,15 @@
 
 #include <config.h>
 
+struct worker_st;
+
+void _oclog(const struct worker_st *server, int priority, const char *fmt, ...)
+{
+	(void)server;
+	(void)priority;
+	(void)fmt;
+}
+
 #ifndef __linux__
 int main(void)
 {
@@ -50,13 +59,6 @@ int main(void)
 typedef struct worker_st worker_st;
 
 int disable_system_calls(worker_st *ws);
-
-void _oclog(const worker_st *ws, int priority, const char *fmt, ...)
-{
-	(void)ws;
-	(void)priority;
-	(void)fmt;
-}
 
 static long checked_syscall(const char *name, long ret)
 {
