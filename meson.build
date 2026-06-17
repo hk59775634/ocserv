@@ -316,9 +316,16 @@ foreach f : check_funcs
   func_results += {f: cc.has_function(f)}
 endforeach
 
+func_results += {
+  'crypt_gensalt': cc.has_function(
+    'crypt_gensalt',
+    dependencies: crypt_dep
+  )
+}
+
 # Header checks
 check_headers = [
-  'net/if_tun.h', 'linux/if_tun.h', 'netinet/in_systm.h', 'crypt.h',
+  'net/if_tun.h', 'linux/if_tun.h', 'netinet/in_systm.h',
   'linux/net_tstamp.h', 'linux/netlink.h', 'linux/rtnetlink.h',
   'linux/sock_diag.h', 'linux/unix_diag.h',
 ]
