@@ -147,7 +147,8 @@ if have_cwrap
     'haproxy-proxyproto', 'haproxy-proxyproto-v1',
     'drain-server', 'drain-server-fail',
     'test-ignore-querystring-of-post',
-    'test-group-cert', 'test-fork', 'test-pass-svc', 'test-cert-svc',
+    'test-group-cert', 'test-group-cert-autoselect',
+    'test-fork', 'test-pass-svc', 'test-cert-svc',
     'test-secmod-kill', 'test-syslog-facility',
   ]
 

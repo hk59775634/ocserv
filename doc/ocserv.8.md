@@ -189,8 +189,17 @@ possession of the corresponding private key.
 The certificate need also contain user identifying information,
 for example, the user ID of the client must be embedded in the certificate's
 Distinguished Name (DN), i.e., in the Common Name, or UID fields. For the
-server to read the name, the *cert-user-oid* configuration option
+server to read the user ID, the *cert-user-oid* configuration option
 must be set.
+
+When *cert-group-oid* is configured the server extracts group names from the
+client certificate's DN and presents them for selection.  If the client does
+not request a group and exactly one eligible group is present in the
+certificate — where eligible means either no *select-group* list is configured,
+or the group appears in the configured *select-group* list — the server
+automatically selects it and completes authentication without an extra round
+trip.  If zero or more than one eligible groups are found the client is
+prompted to choose.
 
 The following examples demonstrate how to use certtool from GnuTLS to
 generate such CA.

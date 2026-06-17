@@ -407,6 +407,36 @@ REQ-AUTH-AUTH-005.
 **Links:** REQ-AUTH-INIT-002, REQ-AUTH-INIT-005, REQ-AUTH-AUTH-005,
 REQ-AUTH-AUTH-006, REQ-AUTH-AUTH-008
 
+### REQ-AUTH-AUTH-041 — Worker auto-selects the certificate group when exactly one is eligible, avoiding an unnecessary group-selection prompt
+
+**Requirement:** In `post_auth_handler()`, when `AUTH_TYPE_CERTIFICATE` is
+active, `ws->cert_groups_size > 0`, and the client did not request a group
+(no `group_list`/`group-select` field, no `select-group-by-url` match, and
+`default-select-group` not requested), the worker MUST NOT unconditionally
+respond with the "Please select your group." prompt. It MUST first compute
+the set of *eligible* certificate groups: if `select-group` is configured
+(`WSRCONFIG(ws)->n_group_list > 0`), eligible groups are the entries of
+`ws->cert_groups[]` that also appear in `WSRCONFIG(ws)->group_list[]`;
+otherwise (no `select-group` configured) every entry of `ws->cert_groups[]`
+is eligible. If exactly one eligible group exists, the worker MUST set
+`ws->groupname` to it and proceed with `SEC_AUTH_INIT` as if the client had
+requested that group, completing authentication without an extra round trip.
+If zero or more than one eligible groups exist, the "Please select your
+group." prompt (and the cert-group fallback of REQ-AUTH-AUTH-006) is
+unchanged.
+**Strength:** MUST
+**Status:** DERIVED
+**Source:** src/worker-auth.c:1730-1738
+**Acceptance:** positive, local — `cert-group-oid` configured, no
+`select-group` list, client certificate carries exactly one group (OU); a
+first POST with no `<group-select>` completes directly with
+`<auth id="success">` and a `Set-Cookie: webvpncontext=` header. Negative,
+local — client certificate carries multiple groups (OUs) and no
+`select-group` list is configured (or more than one of its groups matches a
+configured `select-group` list); a first POST with no `<group-select>` still
+yields "Please select your group." and no session cookie.
+**Links:** REQ-AUTH-AUTH-006, REQ-AUTH-AUTH-010
+
 ## AUTH — plain (`auth = plain[passwd=...,otp=...]`)
 
 ### REQ-AUTH-AUTH-011 — `plain[...]` requires at least one of `passwd=`/`otp=`; `vhost_init` fails closed without it
