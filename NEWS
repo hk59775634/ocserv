@@ -48,6 +48,8 @@
   * /ca.cer
 - Fix incorrect local address when using PROXY protocol with IPv6 (#711).
 - Fix calculation of avg_auth_time across sec-mod instances (#736)
+- plain auth: treat '*' in the ocpasswd group field as allowing the user
+  to select any configured group (#748)
 - The bundled llhttp was updated to 9.4.1.
 
 
