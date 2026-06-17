@@ -135,7 +135,7 @@ int disable_system_calls(struct worker_st *ws)
 	ADD_SYSCALL(setitimer, 0);
 	ADD_SYSCALL(getpid, 0);
 
-	/* memory allocation - both are used by different platforms */
+	/* memory allocations used by different platforms */
 	ADD_SYSCALL(brk, 0);
 	ADD_SYSCALL(mmap, 0);
 	ADD_SYSCALL(munmap, 0);
