@@ -40,14 +40,11 @@
 
 #ifdef USE_SECCOMP_TRAP
 #define _SECCOMP_ERR SCMP_ACT_TRAP
-#include <execinfo.h>
 #include <signal.h>
 void sigsys_action(int sig, siginfo_t *info, void *ucontext)
 {
-	char *call_addr = *backtrace_symbols(&info->si_call_addr, 1);
-
-	oc_syslog(LOG_ERR, "Function %s called disabled syscall %d", call_addr,
-		  info->si_syscall);
+	oc_syslog(LOG_ERR, "Address %p called disabled syscall %d",
+		  info->si_call_addr, info->si_syscall);
 	exit(EXIT_FAILURE);
 }
 
