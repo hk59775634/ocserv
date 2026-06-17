@@ -111,6 +111,7 @@ always_scripts = [
   'test-http-limits',
   'test-http-smuggling',
   'test-cookie-sid-overflow',
+  'test-select-group-length-warning',
 ]
 
 foreach s : always_scripts
