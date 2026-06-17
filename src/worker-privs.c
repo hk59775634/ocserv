@@ -186,6 +186,12 @@ int disable_system_calls(struct worker_st *ws)
 
 	ADD_SYSCALL(open, 0);
 	ADD_SYSCALL(openat, 0);
+#if defined(SYS_getdents64) || defined(__NR_getdents64)
+	ADD_SYSCALL(getdents64, 0);
+#endif
+#if defined(SYS_getdents) || defined(__NR_getdents)
+	ADD_SYSCALL(getdents, 0);
+#endif
 #if defined(SYS_fstat) || defined(__NR_fstat)
 	ADD_SYSCALL(fstat, 0);
 #endif
@@ -198,6 +204,12 @@ int disable_system_calls(struct worker_st *ws)
 #endif
 #if defined(SYS_newfstatat) || defined(__NR_newfstatat)
 	ADD_SYSCALL(newfstatat, 0);
+#endif
+#if defined(SYS_fstatat64) || defined(__NR_fstatat64)
+	ADD_SYSCALL(fstatat64, 0);
+#endif
+#if defined(SYS_statx) || defined(__NR_statx)
+	ADD_SYSCALL(statx, 0);
 #endif
 	ADD_SYSCALL(lseek, 0);
 

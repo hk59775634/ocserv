@@ -132,6 +132,85 @@ Options not specified within a virtual host, or within a per-user/group file,
 fall back to the global configuration value, or to the built-in default if
 not set globally.
 
+## ANYCONNECT CLIENT WEB-DEPLOY UPDATES
+When ocserv is built with AnyConnect client compatibility enabled, it can
+advertise web-deploy update packages to Cisco AnyConnect clients. Prepared
+web-deploy packages are stored under `1/webdeploy` inside `chroot-dir`. For
+example, when `chroot-dir = /var/lib/ocserv`, a prepared Windows package would
+use:
+
+    /var/lib/ocserv/1/webdeploy/anyconnect-win-4.10.07062-core-vpn-webdeploy-k9.pkg/
+
+No extra configuration option is required. Ocserv uses the package directory name
+to determine platform and version, serves `VPNManifest.xml`,
+`VPNHashManifest.xml` if present, downloader files, and payload files from that
+directory, and generates `/1/binaries/update.txt` from the selected version.
+The `1/binaries` directory remains supported as a fallback for unprepared legacy
+packages.
+
+The update manifest, downloader, and payload URLs are available only after the
+client has completed gateway authentication and presents a valid webvpn cookie.
+They do not require the VPN tunnel to be fully established, which matches the
+Cisco client web-deploy flow.
+
+This implementation has been validated with a Cisco Secure Client 5.1 web-deploy
+flow that requests the platform marker, `update.txt`, downloader,
+`VPNHashManifest.xml`, and package payload URLs after gateway authentication.
+Advertising update metadata directly in the authentication reply is not part of
+this implementation.
+
+Package filenames must use one of these forms:
+
+    anyconnect-<platform>-<version>-<name-containing-webdeploy>.<extension>
+    cisco-secure-client-<platform>-<version>-<name-containing-webdeploy>.<extension>
+
+Supported platform tokens are `win`, `win64`, `win-arm64`, `macos`, `linux`,
+`linux64`, and `linux-arm64`. Version components are compared numerically, so
+`4.10.07062` is newer than `4.10.00093`. Ocserv advertises only the newest
+package for the requesting client platform. If the requesting AnyConnect client
+is already current, `/1/binaries/update.txt` reports the client's own version
+instead of `0,0,0000`. If there is no matching package, ocserv returns an empty
+manifest and does not offer an update.
+
+Original Cisco clients may also require downloader and hash-manifest files from
+the web-deploy package. Ocserv serves those files when the package has been
+unpacked under `1/webdeploy/<package-filename>` inside `chroot-dir`. The
+unpacked directory may contain `VPNManifest.xml`, `VPNHashManifest.xml`,
+platform marker files such as `Darwin_i386`, and a downloader such as
+`binaries/vpndownloader.sh` or `binaries/vpndownloader.exe`. Payload files
+referenced by the manifests, such as `.msi`, `.dmg`, `.sh`, or `.exe`
+installers, can remain under that package's `binaries` subdirectory; ocserv
+serves them through the Cisco-compatible `/1/binaries/<filename>` URL.
+
+The helper script `contrib/anyconnect-webdeploy-prepare` can prepare this
+layout from Cisco web-deploy packages. For example:
+
+    contrib/anyconnect-webdeploy-prepare /var/lib/ocserv
+
+Packages that do not contain these additional manifest and downloader files can
+be left in `1/binaries` and continue to be advertised using ocserv's generated
+compatibility manifest.
+
+Some older AnyConnect web-deploy packages do not contain `VPNHashManifest.xml`.
+Those packages can still be prepared when they contain `VPNManifest.xml` and a
+downloader such as `binaries/vpndownloader.exe`.
+
+To prepare specific packages instead of scanning all web-deploy packages under
+`1/binaries`, pass them explicitly:
+
+    contrib/anyconnect-webdeploy-prepare /var/lib/ocserv \
+      cisco-secure-client-macos-5.1.15.287-webdeploy-k9.pkg
+
+To avoid surprising non-Cisco compatible clients, ocserv only advertises these
+packages to Cisco AnyConnect user-agents. OpenConnect-compatible and other
+non-original clients continue to receive the empty compatibility manifest and
+`0,0,0000` update version.
+
+Use debug logging to troubleshoot update selection. At debug level, ocserv logs
+the detected client platform, the selected update package, whether it came from a
+prepared web-deploy directory or the legacy `1/binaries` fallback, and why no
+update or binary download was offered.
+
 ## VIRTUAL HOSTS
 Ocserv supports virtual hosts, allowing a single instance to serve multiple
 domains with different configurations. This feature operates similarly to
