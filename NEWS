@@ -4,6 +4,8 @@
   affected session to be rejected rather than silently ignored. A configured
   default-user-conf or default-group-conf file that cannot be opened also
   now causes session rejection (previously silently ignored).
+- Fix point-to-point IPv6 networks by starting address leasing precisely
+  at network address instead of network address + 1 (#714)
 
 
 * Version 1.5.0 (released 2026-06-07)
