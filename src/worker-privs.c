@@ -40,15 +40,68 @@
 
 #ifdef USE_SECCOMP_TRAP
 #define _SECCOMP_ERR SCMP_ACT_TRAP
-#include <execinfo.h>
-#include <signal.h>
+
+static size_t append_str(char *buf, size_t pos, size_t max, const char *s)
+{
+	while (*s != 0 && pos < max)
+		buf[pos++] = *s++;
+
+	return pos;
+}
+
+static size_t append_uint(char *buf, size_t pos, size_t max, unsigned int v)
+{
+	char tmp[16];
+	size_t i = 0;
+
+	do {
+		tmp[i++] = '0' + (v % 10);
+		v /= 10;
+	} while (v != 0 && i < sizeof(tmp));
+
+	while (i > 0 && pos < max)
+		buf[pos++] = tmp[--i];
+
+	return pos;
+}
+
+static size_t append_hex_ptr(char *buf, size_t pos, size_t max, uintptr_t value)
+{
+	static const char hexdig[] = "0123456789abcdef";
+	char tmp[2 * sizeof(uintptr_t)];
+	size_t i = 0;
+
+	pos = append_str(buf, pos, max, "0x");
+
+	do {
+		tmp[i++] = hexdig[value & 0xf];
+		value >>= 4;
+	} while (value != 0 && i < sizeof(tmp));
+
+	while (i > 0 && pos < max)
+		buf[pos++] = tmp[--i];
+
+	return pos;
+}
+
 void sigsys_action(int sig, siginfo_t *info, void *ucontext)
 {
-	char *call_addr = *backtrace_symbols(&info->si_call_addr, 1);
+	char buf[160];
+	size_t pos = 0;
 
-	oc_syslog(LOG_ERR, "Function %s called disabled syscall %d", call_addr,
-		  info->si_syscall);
-	exit(EXIT_FAILURE);
+	(void)sig;
+	(void)ucontext;
+
+	pos = append_str(buf, pos, sizeof(buf), "seccomp trap: syscall ");
+	pos = append_uint(buf, pos, sizeof(buf), info->si_syscall);
+	pos = append_str(buf, pos, sizeof(buf), " at ");
+	pos = append_hex_ptr(buf, pos, sizeof(buf),
+			     (uintptr_t)info->si_call_addr);
+	if (pos < sizeof(buf))
+		buf[pos++] = '\n';
+
+	(void)write(STDERR_FILENO, buf, pos);
+	_exit(EXIT_FAILURE);
 }
 
 int set_sigsys_handler(struct worker_st *ws)
@@ -135,9 +188,12 @@ int disable_system_calls(struct worker_st *ws)
 	ADD_SYSCALL(setitimer, 0);
 	ADD_SYSCALL(getpid, 0);
 
-	/* memory allocation - both are used by different platforms */
+	/* memory allocations used by different platforms */
 	ADD_SYSCALL(brk, 0);
 	ADD_SYSCALL(mmap, 0);
+	ADD_SYSCALL(munmap, 0);
+	ADD_SYSCALL(mremap, 0);
+	ADD_SYSCALL(madvise, 0);
 
 #if defined(SYS_getrandom) || defined(__NR_getrandom)
 	ADD_SYSCALL(getrandom, 0); /* used by gnutls 3.5.x */
