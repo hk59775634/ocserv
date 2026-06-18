@@ -65,8 +65,7 @@ static size_t append_uint(char *buf, size_t pos, size_t max, unsigned int v)
 	return pos;
 }
 
-static size_t append_hex_ptr(char *buf, size_t pos, size_t max,
-			     uintptr_t value)
+static size_t append_hex_ptr(char *buf, size_t pos, size_t max, uintptr_t value)
 {
 	static const char hexdig[] = "0123456789abcdef";
 	char tmp[2 * sizeof(uintptr_t)];
@@ -93,8 +92,7 @@ void sigsys_action(int sig, siginfo_t *info, void *ucontext)
 	(void)sig;
 	(void)ucontext;
 
-	pos = append_str(buf, pos, sizeof(buf),
-			 "seccomp trap: syscall ");
+	pos = append_str(buf, pos, sizeof(buf), "seccomp trap: syscall ");
 	pos = append_uint(buf, pos, sizeof(buf), info->si_syscall);
 	pos = append_str(buf, pos, sizeof(buf), " at ");
 	pos = append_hex_ptr(buf, pos, sizeof(buf),
