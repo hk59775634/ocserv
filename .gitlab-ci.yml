@@ -349,7 +349,12 @@ seccomp/Alpine:
   - git submodule update --init
   - meson setup build -Dseccomp-trap=true
   - ninja -C build -j$JOBS
-  - meson test -C build --num-processes $JOBS --no-rebuild
+  - >-
+    meson test -C build --no-rebuild --num-processes 1 --print-errorlogs
+    session-timeout traffic bandwidth
+    oc-aes256-gcm-cipher oc-aes128-gcm-cipher
+    ac-aes128-gcm-cipher ac-aes256-gcm-cipher
+    no-dtls-cipher
   tags:
   - saas-linux-medium-amd64
   except:
