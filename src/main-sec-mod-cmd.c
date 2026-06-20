@@ -739,6 +739,7 @@ int session_close(sec_mod_instance_st *sec_mod_instance, struct proc_st *proc)
 {
 	main_server_st *s = sec_mod_instance->server;
 	int ret, e;
+	unsigned int timeout = MAIN_SEC_MOD_TIMEOUT;
 	SecmSessionCloseMsg ireq = SECM_SESSION_CLOSE_MSG__INIT;
 	CliStatsMsg *msg = NULL;
 
@@ -755,6 +756,10 @@ int session_close(sec_mod_instance_st *sec_mod_instance, struct proc_st *proc)
 
 	if (proc->invalidated)
 		ireq.server_disconnected = 1;
+	if (s->shutdown_in_progress) {
+		ireq.graceful_shutdown = 1;
+		ireq.has_graceful_shutdown = 1;
+	}
 
 	mslog(s, proc, LOG_DEBUG, "sending msg %s to sec-mod",
 	      cmd_request_to_str(CMD_SECM_SESSION_CLOSE));
@@ -766,25 +771,59 @@ int session_close(sec_mod_instance_st *sec_mod_instance, struct proc_st *proc)
 	if (ret < 0) {
 		mslog(s, proc, LOG_ERR,
 		      "error sending message to sec-mod cmd socket");
+		if (s->shutdown_in_progress)
+			s->shutdown_acct_stop_failures++;
 		return -1;
 	}
 
-	ret = recv_msg(proc, sec_mod_instance->sec_mod_fd_sync,
-		       CMD_SECM_CLI_STATS, (void *)&msg,
-		       (unpack_func)cli_stats_msg__unpack,
-		       MAIN_SEC_MOD_TIMEOUT);
+	if (s->shutdown_in_progress) {
+		time_t now = time(NULL);
+
+		if (s->shutdown_deadline > now)
+			timeout = s->shutdown_deadline - now;
+		else
+			timeout = 1;
+	}
+
+	for (unsigned int tries = 0; tries < 3; tries++) {
+		ret = recv_msg(proc, sec_mod_instance->sec_mod_fd_sync,
+			       CMD_SECM_CLI_STATS, (void *)&msg,
+			       (unpack_func)cli_stats_msg__unpack, timeout);
+		if (ret != ERR_BAD_COMMAND)
+			break;
+
+		mslog(s, proc, LOG_WARNING,
+		      "discarded unexpected sec-mod sync reply while closing session");
+	}
 	if (ret < 0) {
 		e = errno;
 		mslog(s, proc, LOG_ERR,
 		      "error receiving auth cli stats message from sec-mod cmd socket: %s",
 		      strerror(e));
+		if (s->shutdown_in_progress)
+			s->shutdown_acct_stop_failures++;
 		return ret;
+	}
+	if (msg == NULL) {
+		mslog(s, proc, LOG_ERR,
+		      "received empty cli stats message from sec-mod");
+		if (s->shutdown_in_progress)
+			s->shutdown_acct_stop_failures++;
+		return -1;
 	}
 
 	proc->bytes_in = msg->bytes_in;
 	proc->bytes_out = msg->bytes_out;
 	if (msg->has_discon_reason) {
 		proc->discon_reason = msg->discon_reason;
+	}
+	if (s->shutdown_in_progress && msg->has_acct_stop_failed) {
+		if (msg->acct_stop_failed)
+			s->shutdown_acct_stop_failures++;
+		else
+			s->shutdown_acct_stop_failures = 0;
+	} else if (s->shutdown_in_progress) {
+		s->shutdown_acct_stop_failures = 0;
 	}
 
 	update_main_stats(s, proc);

@@ -1202,6 +1202,7 @@ periodically based on `ws->user_config->interim_update_secs`
 `Acct-Terminate-Cause` set from `e->discon_reason`:
 `REASON_USER_DISCONNECT`→`User-Request`,
 `REASON_SERVER_DISCONNECT`→`Admin-Reset`,
+`REASON_SERVER_SHUTDOWN`→`Lost-Service`,
 `REASON_IDLE_TIMEOUT`→`Idle-Timeout`,
 `REASON_SESSION_TIMEOUT`→`Session-Timeout`,
 `REASON_DPD_TIMEOUT`→`Lost-Carrier`, `REASON_ERROR`→`User-Error`, and any

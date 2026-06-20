@@ -201,6 +201,8 @@ const char *discon_reason_to_str(unsigned int reason)
 		return "anyconnect client disconnected";
 	case REASON_SERVER_DISCONNECT:
 		return "server disconnected";
+	case REASON_SERVER_SHUTDOWN:
+		return "server shutdown";
 	case REASON_IDLE_TIMEOUT:
 		return "idle timeout";
 	case REASON_DPD_TIMEOUT:
@@ -227,6 +229,7 @@ unsigned int discon_reason_to_log_level(unsigned int reason)
 	case REASON_USER_DISCONNECT:
 	case REASON_TEMP_DISCONNECT:
 	case REASON_SERVER_DISCONNECT:
+	case REASON_SERVER_SHUTDOWN:
 	case REASON_IDLE_TIMEOUT:
 	case REASON_DPD_TIMEOUT:
 	case REASON_ERROR:

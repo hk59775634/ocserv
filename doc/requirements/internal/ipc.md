@@ -313,17 +313,21 @@ SID, second time with smaller `bytes_in`/`bytes_out`/`uptime`; confirm
 `e->stats` values are unchanged after the second message.
 **Links:** REQ-IPC-031
 
-### REQ-IPC-033 — server_disconnected sets discon_reason
+### REQ-IPC-033 — session close sets server-side discon_reason
 
-**Requirement:** When `secm_session_close_msg.server_disconnected` is true,
-sec-mod MUST set `e->discon_reason = REASON_SERVER_DISCONNECT` and report it
-in the `cli_stats_msg.discon_reason` reply field.
+**Requirement:** When `secm_session_close_msg.graceful_shutdown` is true,
+sec-mod MUST set `e->discon_reason = REASON_SERVER_SHUTDOWN`. Otherwise, when
+`secm_session_close_msg.server_disconnected` is true, sec-mod MUST set
+`e->discon_reason = REASON_SERVER_DISCONNECT`. The selected reason MUST be
+reported in the `cli_stats_msg.discon_reason` reply field.
 **Strength:** MUST
 **Status:** DERIVED
 **Source:** src/sec-mod-auth.c:668-676
 **Acceptance:** unit, local — send `SECM_SESSION_CLOSE` with
 `server_disconnected = true`; confirm `CMD_SECM_CLI_STATS` reply has
-`discon_reason = REASON_SERVER_DISCONNECT`. Cross-check `occtl show events`
+`discon_reason = REASON_SERVER_DISCONNECT`. Send `SECM_SESSION_CLOSE` with
+`graceful_shutdown = true`; confirm the reply has
+`discon_reason = REASON_SERVER_SHUTDOWN`. Cross-check `occtl show events`
 output, which surfaces `discon_reason`.
 **Links:** REQ-IPC-031
 

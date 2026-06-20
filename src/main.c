@@ -97,6 +97,7 @@ ev_io ctl_watcher;
 sec_mod_watcher_st *sec_mod_watchers;
 ev_timer maintenance_watcher;
 ev_timer graceful_shutdown_watcher;
+ev_timer shutdown_watcher;
 ev_signal maintenance_sig_watcher;
 ev_signal term_sig_watcher;
 ev_signal int_sig_watcher;
@@ -979,6 +980,53 @@ static unsigned int kill_children(main_server_st *s)
 	return nproc;
 }
 
+static unsigned int count_active_sessions(main_server_st *s)
+{
+	struct proc_st *ctmp = NULL;
+	unsigned int sessions = 0;
+
+	list_for_each(&s->proc_list.head, ctmp, list)
+	{
+		if (ctmp->active_sid)
+			sessions++;
+	}
+
+	return sessions;
+}
+
+static void close_listeners(main_server_st *s)
+{
+	struct listener_st *ltmp = NULL, *lpos;
+
+	list_for_each_safe(&s->listen_list.head, ltmp, lpos, list)
+	{
+		ev_io_stop(main_loop, &ltmp->io);
+		if (ltmp->fd != -1)
+			close(ltmp->fd);
+		list_del(&ltmp->list);
+		talloc_free(ltmp);
+		s->listen_list.total--;
+	}
+}
+
+static void log_remaining_shutdown_sessions(main_server_st *s)
+{
+	struct proc_st *ctmp = NULL;
+	time_t now = time(NULL);
+
+	list_for_each(&s->proc_list.head, ctmp, list)
+	{
+		if (!ctmp->active_sid)
+			continue;
+
+		mslog(s, ctmp, LOG_ERR,
+		      "session did not complete RADIUS accounting stop during shutdown (user: %s, uptime: %ld, rx: %" PRIu64 ", tx: %" PRIu64 ", reason: %s)",
+		      ctmp->username, (long)(now - ctmp->conn_time),
+		      ctmp->bytes_in, ctmp->bytes_out,
+		      discon_reason_to_str(ctmp->discon_reason));
+	}
+}
+
 static void kill_children_auth_timeout(main_server_st *s)
 {
 	struct proc_st *ctmp = NULL, *cpos;
@@ -1027,21 +1075,96 @@ static void terminate_server(main_server_st *s)
 	ev_break(main_loop, EVBREAK_ALL);
 }
 
+#define SHUTDOWN_ACCOUNTING_TIMEOUT_SECS 30
+#define SHUTDOWN_ACCOUNTING_FAILURE_LIMIT 5
+
+static void graceful_accounting_shutdown_watcher_cb(EV_P_ ev_timer *w,
+						    int revents)
+{
+	main_server_st *s = ev_userdata(loop);
+	time_t now = time(NULL);
+
+	if (s->proc_list.total == 0) {
+		mslog(s, NULL, LOG_INFO,
+		      "all sessions terminated during graceful shutdown");
+		terminate_server(s);
+		return;
+	}
+
+	if (s->shutdown_acct_stop_failures >=
+	    SHUTDOWN_ACCOUNTING_FAILURE_LIMIT) {
+		mslog(s, NULL, LOG_ERR,
+		      "RADIUS accounting stop failed %u times in a row; forcing termination with %u sessions remaining",
+		      s->shutdown_acct_stop_failures, s->proc_list.total);
+		log_remaining_shutdown_sessions(s);
+		terminate_server(s);
+		return;
+	}
+
+	if (now >= s->shutdown_deadline) {
+		mslog(s, NULL, LOG_ERR,
+		      "graceful accounting shutdown timed out; forcing termination with %u sessions remaining",
+		      s->proc_list.total);
+		log_remaining_shutdown_sessions(s);
+		terminate_server(s);
+		return;
+	}
+
+	ev_timer_again(loop, &shutdown_watcher);
+}
+
+static void start_graceful_accounting_shutdown(main_server_st *s)
+{
+	struct proc_st *ctmp = NULL, *cpos;
+	unsigned int active_sessions = count_active_sessions(s);
+
+	close_listeners(s);
+
+	if (active_sessions == 0) {
+		mslog(s, NULL, LOG_INFO,
+		      "termination request received; no active sessions, exiting");
+		terminate_server(s);
+		return;
+	}
+
+	if (s->shutdown_in_progress)
+		return;
+
+	s->shutdown_in_progress = 1;
+	s->shutdown_acct_stop_failures = 0;
+	s->shutdown_deadline = time(NULL) + SHUTDOWN_ACCOUNTING_TIMEOUT_SECS;
+
+	mslog(s, NULL, LOG_INFO,
+	      "termination request received; gracefully closing %u sessions for RADIUS accounting stop",
+	      active_sessions);
+
+	list_for_each_safe(&s->proc_list.head, ctmp, cpos, list)
+	{
+		if (ctmp->active_sid) {
+			disconnect_proc(s, ctmp);
+		} else {
+			remove_proc(s, ctmp, RPROC_KILL | RPROC_QUIT);
+		}
+	}
+
+	shutdown_watcher.repeat = 0.5;
+	ev_timer_again(main_loop, &shutdown_watcher);
+}
+
 static void graceful_shutdown_watcher_cb(EV_P_ ev_timer *w, int revents)
 {
 	main_server_st *s = ev_userdata(loop);
 
-	terminate_server(s);
+	start_graceful_accounting_shutdown(s);
 }
 
 static void term_sig_watcher_cb(struct ev_loop *loop, ev_signal *w, int revents)
 {
 	main_server_st *s = ev_userdata(loop);
-	struct listener_st *ltmp = NULL, *lpos;
 	unsigned int server_drain_ms = GETRCONFIG(s)->server_drain_ms;
 
 	if (server_drain_ms == 0) {
-		terminate_server(s);
+		start_graceful_accounting_shutdown(s);
 	} else {
 		if (!ev_is_active(&graceful_shutdown_watcher)) {
 			mslog(s, NULL, LOG_INFO,
@@ -1053,16 +1176,7 @@ static void term_sig_watcher_cb(struct ev_loop *loop, ev_signal *w, int revents)
 			      server_drain_ms);
 			ev_timer_again(loop, &graceful_shutdown_watcher);
 
-			// Close the listening ports and stop the IO
-			list_for_each_safe(&s->listen_list.head, ltmp, lpos,
-					   list)
-			{
-				ev_io_stop(loop, &ltmp->io);
-				close(ltmp->fd);
-				list_del(&ltmp->list);
-				talloc_free(ltmp);
-				s->listen_list.total--;
-			}
+			close_listeners(s);
 		}
 	}
 }
@@ -1780,6 +1894,7 @@ int main(int argc, char *argv[])
 	ev_timer_start(main_loop, &maintenance_watcher);
 
 	ev_init(&graceful_shutdown_watcher, graceful_shutdown_watcher_cb);
+	ev_init(&shutdown_watcher, graceful_accounting_shutdown_watcher_cb);
 
 #if defined(CAPTURE_LATENCY_SUPPORT)
 	ev_init(&latency_watcher, latency_watcher_cb);

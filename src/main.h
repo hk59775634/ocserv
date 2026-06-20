@@ -301,6 +301,10 @@ typedef struct main_server_st {
 	int top_fd;
 	int ctl_fd;
 
+	unsigned int shutdown_in_progress;
+	time_t shutdown_deadline;
+	unsigned int shutdown_acct_stop_failures;
+
 	void *main_pool; /* talloc main pool */
 	void *config_pool; /* talloc config pool */
 

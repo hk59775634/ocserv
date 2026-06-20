@@ -1,0 +1,156 @@
+#!/bin/bash
+#
+# Copyright (C) 2026 OpenConnect VPN project
+#
+# This file is part of ocserv.
+#
+# ocserv is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at
+# your option) any later version.
+#
+# ocserv is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+OCCTL="${OCCTL:-../src/occtl/occtl}"
+SERV="${SERV:-../src/ocserv}"
+srcdir=${srcdir:-.}
+PIDFILE=ocserv-pid.$$.tmp
+CLIPID=oc-pid.$$.tmp
+PATH=${PATH}:/usr/sbin
+IP=$(command -v ip)
+RADIUSLOG=radius-shutdown.$$.log
+RADIUSD=$(command -v radiusd)
+
+if test -z "${RADIUSD}";then
+	RADIUSD=$(command -v freeradius)
+fi
+
+. `dirname $0`/common.sh
+
+eval "${GETPORT}"
+
+if test -z "${IP}";then
+	echo "no IP tool is present"
+	exit 1
+fi
+
+if test -z "${RADIUSD}";then
+	echo "no radiusd is present"
+	exit 77
+fi
+
+if test "$(id -u)" != "0";then
+	echo "This test must be run as root"
+	exit 77
+fi
+
+echo "Testing RADIUS accounting stop on server shutdown... "
+
+wait_radius_ready() {
+	local elapsed=0
+
+	while [ "${elapsed}" -lt 30 ]; do
+		if grep -q "Ready to process requests" "${RADIUSLOG}" 2>/dev/null;then
+			return 0
+		fi
+		if grep -q "globally writable" "${RADIUSLOG}" 2>/dev/null;then
+			echo "radiusd refuses globally writable test config"
+			exit 77
+		fi
+		if test -n "${RADIUSPID}" && ! kill -0 "${RADIUSPID}" 2>/dev/null;then
+			cat "${RADIUSLOG}" 2>/dev/null
+			echo "radiusd exited before becoming ready"
+			exit 1
+		fi
+		sleep 1
+		elapsed=$((elapsed + 1))
+	done
+
+	echo "Timeout: radiusd did not become ready" >&2
+	exit 1
+}
+
+wait_radius_stop() {
+	local elapsed=0
+
+	while [ "${elapsed}" -lt 10 ]; do
+		if grep -q "Acct-Status-Type = Stop" "${RADIUSLOG}" 2>/dev/null;then
+			return 0
+		fi
+		sleep 1
+		elapsed=$((elapsed + 1))
+	done
+
+	return 1
+}
+
+finish() {
+	set +e
+	echo " * Cleaning up..."
+	test -n "${CLIPID}" && test -f "${CLIPID}" &&
+		kill $(cat "${CLIPID}") >/dev/null 2>&1
+	test -n "${PID}" && kill "${PID}" >/dev/null 2>&1
+	test -n "${RADIUSPID}" && kill "${RADIUSPID}" >/dev/null 2>&1
+	test -n "${CLIPID}" && rm -f "${CLIPID}" >/dev/null 2>&1
+	test -n "${PIDFILE}" && rm -f "${PIDFILE}" >/dev/null 2>&1
+	test -n "${CONFIG}" && rm -f "${CONFIG}" >/dev/null 2>&1
+	if test "$VERBOSE" = 1 && test -f "${RADIUSLOG}";then
+		cat "${RADIUSLOG}"
+	fi
+	rm -f "${RADIUSLOG}"
+}
+trap finish EXIT
+
+USERNAME=test
+
+. `dirname $0`/random-net.sh
+. `dirname $0`/ns.sh
+
+${CMDNS2} ${IP} link set dev lo up
+
+${CMDNS2} ${RADIUSD} -d ${RADDB_DIR}/ -s -xx -l ${RADIUSLOG} &
+RADIUSPID=$!
+
+update_config radius.config
+if test "$VERBOSE" = 1;then
+	DEBUG="-d 3"
+fi
+
+${CMDNS2} ${SERV} -p ${PIDFILE} -f -c ${CONFIG} ${DEBUG} &
+PID=$!
+
+wait_radius_ready
+wait_ns_port t ${PORT}
+
+echo " * Connecting client..."
+( echo "${USERNAME}" | ${CMDNS1} ${OPENCONNECT} ${ADDRESS}:${PORT} \
+	-u ${USERNAME} \
+	--servercert=pin-sha256:xp3scfzy3rOQsv9NcOve/8YVVv+pHr4qNCXEXrNl5s8= \
+	-s ${srcdir}/scripts/vpnc-script --pid-file=${CLIPID} \
+	--passwd-on-stdin -b )
+if test $? != 0;then
+	echo "Could not connect to server"
+	exit 1
+fi
+
+sleep 3
+
+echo " * Stopping ocserv with active RADIUS accounting session..."
+kill -15 $(cat "${PIDFILE}")
+wait ${PID}
+PID=""
+
+if ! wait_radius_stop;then
+	cat "${RADIUSLOG}"
+	echo "FAIL: RADIUS accounting Stop was not sent on server shutdown"
+	exit 1
+fi
+
+exit 0

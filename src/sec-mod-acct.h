@@ -39,7 +39,7 @@ typedef struct acct_mod_st {
 		void *vctx, unsigned int auth_method,
 		const common_acct_info_st *ai,
 		struct stats_st *stats); /* optional, may be null */
-	void (*close_session)(
+	int (*close_session)(
 		void *vctx, unsigned int auth_method,
 		const common_acct_info_st *ai, struct stats_st *stats,
 		unsigned discon_reason /*REASON_*/); /* optional may be null */

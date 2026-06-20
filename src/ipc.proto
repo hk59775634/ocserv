@@ -142,6 +142,7 @@ message cli_stats_msg
 	optional string ipv4 = 6;
 	optional string ipv6 = 7;
 	optional uint32 discon_reason = 8;
+	optional bool acct_stop_failed = 9;
 }
 
 /* UDP_FD */
@@ -326,6 +327,7 @@ message secm_session_close_msg
 	optional string ipv4 = 6;
 	optional string ipv6 = 7;
 	required bool server_disconnected = 8 [default = false];
+	optional bool graceful_shutdown = 9;
 }
 
 /* SECM_STATS */
