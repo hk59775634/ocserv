@@ -1020,7 +1020,8 @@ static void log_remaining_shutdown_sessions(main_server_st *s)
 			continue;
 
 		mslog(s, ctmp, LOG_ERR,
-		      "session did not complete RADIUS accounting stop during shutdown (user: %s, uptime: %ld, rx: %" PRIu64 ", tx: %" PRIu64 ", reason: %s)",
+		      "session did not complete RADIUS accounting stop during shutdown (user: %s, uptime: %ld, "
+		      "rx: %" PRIu64 ", tx: %" PRIu64 ", reason: %s)",
 		      ctmp->username, (long)(now - ctmp->conn_time),
 		      ctmp->bytes_in, ctmp->bytes_out,
 		      discon_reason_to_str(ctmp->discon_reason));
