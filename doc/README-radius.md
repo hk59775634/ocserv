@@ -65,6 +65,8 @@ Note that the accounting session is reported as terminated as soon as
 possible when the user disconnects explicitly. When the disconnection
 is due to timeout or other network reasons, the users have their connection
 remain valid until the `cookie-timeout` value expires.
+During server shutdown, active sessions are closed before the security module
+exits so that accounting stop records can be sent.
 
 
 Dictionary

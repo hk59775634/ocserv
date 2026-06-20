@@ -163,7 +163,7 @@ int handle_sec_auth_stats_cmd(sec_mod_st *sec, const CliStatsMsg *req,
 int terminate_user_sessions(sec_mod_st *sec, const char *username);
 int terminate_session_by_sid(sec_mod_st *sec, const char *safe_id,
 			     size_t safe_id_len);
-void sec_auth_user_deinit(sec_mod_st *sec, client_entry_st *e);
+int sec_auth_user_deinit(sec_mod_st *sec, client_entry_st *e);
 
 void sec_mod_server(void *main_pool, void *config_pool,
 		    struct list_head *vconfig, const char *socket_file,

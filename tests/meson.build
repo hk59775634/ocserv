@@ -354,9 +354,9 @@ if get_option('root-tests')
   endif
 
   if radcli_dep.found()
-    foreach s : ['radius', 'radius-group', 'radius-multi-group',
-                 'radius-multi-group-comma', 'radius-otp', 'radius-config',
-                 'radius-ipv6-prefix']
+    foreach s : ['radius', 'radius-shutdown', 'radius-group',
+                 'radius-multi-group', 'radius-multi-group-comma',
+                 'radius-otp', 'radius-config', 'radius-ipv6-prefix']
       test(s, find_program(s),
         env:     test_env,
         timeout: 300,

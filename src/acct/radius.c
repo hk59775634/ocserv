@@ -260,10 +260,10 @@ cleanup:
 	return ret;
 }
 
-static void radius_acct_close_session(void *_vctx, unsigned int auth_method,
-				      const common_acct_info_st *ai,
-				      stats_st *stats,
-				      unsigned int discon_reason)
+static int radius_acct_close_session(void *_vctx, unsigned int auth_method,
+				     const common_acct_info_st *ai,
+				     stats_st *stats,
+				     unsigned int discon_reason)
 {
 	int ret;
 	uint32_t status_type;
@@ -275,10 +275,12 @@ static void radius_acct_close_session(void *_vctx, unsigned int auth_method,
 	oc_syslog(LOG_DEBUG, "radius-auth: closing session");
 	if (rc_avpair_add(vctx->rh, &send, PW_ACCT_STATUS_TYPE, &status_type,
 			  -1, 0) == NULL)
-		return;
+		return -1;
 
 	if (discon_reason == REASON_USER_DISCONNECT)
 		ret = PW_USER_REQUEST;
+	else if (discon_reason == REASON_SERVER_SHUTDOWN)
+		ret = PW_LOST_SERVICE;
 	else if (discon_reason == REASON_SERVER_DISCONNECT)
 		ret = PW_ADMIN_RESET;
 	else if (discon_reason == REASON_IDLE_TIMEOUT)
@@ -303,11 +305,14 @@ static void radius_acct_close_session(void *_vctx, unsigned int auth_method,
 	if (ret != OK_RC) {
 		oc_syslog(LOG_INFO, "radius-auth: radius_close_session: %d",
 			  ret);
+		ret = -1;
 		goto cleanup;
 	}
+	ret = 0;
 
 cleanup:
 	rc_avpair_free(send);
+	return ret;
 }
 
 const struct acct_mod_st radius_acct_funcs = {

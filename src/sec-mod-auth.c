@@ -626,9 +626,10 @@ int handle_secm_session_close_cmd(sec_mod_st *sec, int fd,
 {
 	client_entry_st *e;
 	int ret;
+	int acct_ret = 0;
 	CliStatsMsg rep = CLI_STATS_MSG__INIT;
 
-	if (req->sid.len != SID_SIZE) {
+	if (req->sid.len != SID_SIZE || req->sid.data == NULL) {
 		seclog(sec, LOG_ERR,
 		       "auth session close but with illegal sid size (%d)!",
 		       (int)req->sid.len);
@@ -664,7 +665,9 @@ int handle_secm_session_close_cmd(sec_mod_st *sec, int fd,
 		e->stats.bytes_out = req->bytes_out;
 	}
 
-	if (req->server_disconnected) {
+	if (req->has_graceful_shutdown && req->graceful_shutdown) {
+		e->discon_reason = REASON_SERVER_SHUTDOWN;
+	} else if (req->server_disconnected) {
 		e->discon_reason = REASON_SERVER_DISCONNECT;
 	}
 
@@ -674,6 +677,17 @@ int handle_secm_session_close_cmd(sec_mod_st *sec, int fd,
 	rep.has_discon_reason = 1;
 	rep.discon_reason = e->discon_reason;
 
+	if (req->has_graceful_shutdown && req->graceful_shutdown &&
+	    e->session_is_open != 0) {
+		stats_add_to(&e->saved_stats, &e->saved_stats, &e->stats);
+		memset(&e->stats, 0, sizeof(e->stats));
+		acct_ret = sec_auth_user_deinit(sec, e);
+		if (acct_ret < 0) {
+			rep.has_acct_stop_failed = 1;
+			rep.acct_stop_failed = 1;
+		}
+	}
+
 	ret = send_msg(e, fd, CMD_SECM_CLI_STATS, &rep,
 		       (pack_size_func)cli_stats_msg__get_packed_size,
 		       (pack_func)cli_stats_msg__pack);
@@ -682,9 +696,11 @@ int handle_secm_session_close_cmd(sec_mod_st *sec, int fd,
 		return ERR_BAD_COMMAND;
 	}
 
-	/* save total stats */
-	stats_add_to(&e->saved_stats, &e->saved_stats, &e->stats);
-	memset(&e->stats, 0, sizeof(e->stats));
+	if (!(req->has_graceful_shutdown && req->graceful_shutdown)) {
+		/* save total stats */
+		stats_add_to(&e->saved_stats, &e->saved_stats, &e->stats);
+		memset(&e->stats, 0, sizeof(e->stats));
+	}
 	expire_client_entry(sec, e);
 
 	return 0;
@@ -1017,9 +1033,10 @@ cleanup:
 	return handle_sec_auth_res(cfd, sec, e, ret);
 }
 
-void sec_auth_user_deinit(sec_mod_st *sec, client_entry_st *e)
+int sec_auth_user_deinit(sec_mod_st *sec, client_entry_st *e)
 {
 	vhost_cfg_st *vhost;
+	int ret = 0;
 
 	vhost = e->vhost;
 
@@ -1029,14 +1046,23 @@ void sec_auth_user_deinit(sec_mod_st *sec, client_entry_st *e)
 	if (vhost->static_config.acct.amod != NULL &&
 	    vhost->static_config.acct.amod->close_session != NULL &&
 	    e->session_is_open != 0) {
-		vhost->static_config.acct.amod->close_session(
+		ret = vhost->static_config.acct.amod->close_session(
 			e->vhost_acct_ctx, e->auth_type, &e->acct_info,
 			&e->saved_stats, e->discon_reason);
+		if (ret < 0) {
+			seclog(sec, LOG_ERR,
+			       "accounting stop failed for user '%s' " SESSION_STR,
+			       e->acct_info.username, e->acct_info.safe_id);
+		}
 	}
+	if (e->session_is_open != 0)
+		e->session_is_open = 0;
 
 	if (e->auth_ctx != NULL) {
 		if (e->module)
 			e->module->auth_deinit(e->auth_ctx);
 		e->auth_ctx = NULL;
 	}
+
+	return ret;
 }

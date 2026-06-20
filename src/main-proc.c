@@ -109,7 +109,8 @@ void remove_proc(main_server_st *s, struct proc_st *proc, unsigned int flags)
 			    proc) < 0) {
 			mslog(s, proc, LOG_ERR,
 			      "error closing session (communication with sec-mod issue)");
-			exit(EXIT_FAILURE);
+			if (!s->shutdown_in_progress)
+				exit(EXIT_FAILURE);
 		}
 	}
 
