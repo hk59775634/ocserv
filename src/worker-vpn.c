@@ -548,7 +548,6 @@ static void send_stats_to_secmod(worker_st *ws, time_t now,
 
 		msg.bytes_in = ws->tun_bytes_in;
 		msg.bytes_out = ws->tun_bytes_out;
-		msg.uptime = now - ws->session_start_time;
 		msg.sid.len = sizeof(ws->sid);
 		msg.sid.data = ws->sid;
 		msg.has_sid = 1;
