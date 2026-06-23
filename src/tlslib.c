@@ -153,6 +153,9 @@ ssize_t cstp_send_file(worker_st *ws, const char *file)
 
 	close(fd);
 
+	/* No way we can read SSIZE_MAX (2 GB on 32-bit systems and 8 EB
+	 * on 64-bit systems) from a profile */
+	// coverity[return_overflow : FALSE]
 	return total;
 }
 
@@ -237,7 +240,7 @@ ssize_t cstp_recv_packet(worker_st *ws, gnutls_datum_t *data, void **p)
 			gnutls_packet_get(packet, data, NULL);
 		}
 	} else {
-		ret = _cstp_recv_packet(ws, ws->buffer, ws->buffer_size);
+		ret = (int)_cstp_recv_packet(ws, ws->buffer, ws->buffer_size);
 		data->data = ws->buffer;
 		data->size = ret;
 	}

@@ -223,6 +223,7 @@ int complete_vpn_info(worker_st *ws, struct vpn_st *vinfo)
 	return 0;
 }
 
+// coverity[leaked_storage : FALSE]
 void ocsigaltstack(struct worker_st *ws)
 {
 #if defined(HAVE_SIGALTSTACK) && defined(HAVE_POSIX_MEMALIGN)

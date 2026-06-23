@@ -61,9 +61,8 @@ static rlim_t compute_worker_data_limit(unsigned headroom_kb)
 	if (pagesize < 0)
 		return 0;
 	/* A process where data * pagesize overflows unsigned long (64-bit)
-	 * would use more than 16 million TB of data pages!
-	 * 
-	 * coverity[INTEGER_OVERFLOW] */
+	 * would use more than 16 million TB of data pages! */
+	// coverity[return_overflow : FALSE]
 	return (rlim_t)data * (rlim_t)pagesize + (rlim_t)headroom_kb * 1024;
 }
 
