@@ -134,6 +134,7 @@ static int in_cksum(unsigned short *buf, int sz)
 
 	sum = (sum >> 16) + (sum & 0xFFFF);
 	sum += (sum >> 16);
+	// coverity[overflow_const : FALSE]
 	ans = ~sum;
 	return ans;
 }
