@@ -628,13 +628,8 @@ interactive:
 	initialize_readline();
 
 	version();
-	for (;;) {
-		line = rl_gets(line);
-		if (line == NULL)
-			return 0;
-
+	while ((line = rl_gets(line)) != NULL)
 		handle_cmd(conn, line, &params);
-	}
 
 	conn_close(conn);
 
