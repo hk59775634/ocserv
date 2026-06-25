@@ -199,7 +199,7 @@ int icmp_ping4(main_server_st *s, struct sockaddr_in *addr1)
 	memset(pkt, 0, sizeof(packet1));
 	pkt->icmp_type = ICMP_ECHO;
 	pkt->icmp_id = id1;
-	pkt->icmp_cksum = inet_cksum((uint16_t *)pkt, sizeof(packet1));
+	pkt->icmp_cksum = htons(inet_cksum((uint16_t *)pkt, sizeof(packet1)));
 
 	while (sendto(pingsock, packet1, DEFDATALEN + ICMP_MINLEN, 0,
 		      (struct sockaddr *)addr1, sizeof(*addr1)) == -1 &&
