@@ -41,6 +41,7 @@ struct radius_vhost_ctx {
 struct radius_ctx_st {
 	char username[MAX_USERNAME_SIZE * 2];
 	char user_agent[MAX_AGENT_NAME];
+	char sid[SAFE_ID_SIZE]; /* session id, sent as Acct-Session-Id */
 
 	char *groupnames[MAX_GROUPS];
 	unsigned int groupnames_size;

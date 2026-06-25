@@ -64,6 +64,7 @@ typedef struct common_auth_init_st {
 	const char *ip;
 	const char *our_ip;
 	const char *user_agent;
+	const char *sid; /* printable session id (== acct_info.safe_id) */
 	unsigned int id;
 } common_auth_init_st;
 

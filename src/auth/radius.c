@@ -167,6 +167,9 @@ static int radius_auth_init(void **ctx, void *pool, void *_vctx,
 		strlcpy(pctx->user_agent, info->user_agent,
 			sizeof(pctx->user_agent));
 
+	if (info->sid)
+		strlcpy(pctx->sid, info->sid, sizeof(pctx->sid));
+
 	*ctx = pctx;
 
 	return ERR_AUTH_CONTINUE;
@@ -373,6 +376,23 @@ static int radius_auth_pass(void *ctx, const char *pass, unsigned int pass_len)
 			__func__, __LINE__, pctx->username);
 		ret = ERR_AUTH_FAIL;
 		goto cleanup;
+	}
+
+	/* Send the session id as Acct-Session-Id so that the same identifier
+	 * is available during both authentication and accounting. This lets
+	 * the RADIUS server key per-session state (e.g. rlm_ippool IP leases)
+	 * on a value that is unique per session and present in both the
+	 * Access-Request and the Accounting-Request packets. */
+	if (pctx->sid[0] != 0) {
+		if (rc_avpair_add(pctx->vctx->rh, &send, PW_ACCT_SESSION_ID,
+				  pctx->sid, -1, 0) == NULL) {
+			oc_syslog(
+				LOG_ERR,
+				"%s:%u: error in constructing radius message for user '%s'",
+				__func__, __LINE__, pctx->username);
+			ret = ERR_AUTH_FAIL;
+			goto cleanup;
+		}
 	}
 
 	if (pctx->user_agent[0] != 0) {
