@@ -70,6 +70,9 @@ static inline void *pam_stack_alloc(struct pam_stack_st *st, size_t size)
 		return NULL;
 	/* Guard page below the stack: overflow → SIGSEGV, not silent heap corruption. */
 	if (mprotect(map, (size_t)pgsz, PROT_NONE) != 0) {
+		/* No way `size` can be even close to SIZE_MAX (4 GB on 32-bit systems
+		 * and 16 EB on 64-bit systems) */
+		// coverity[overflow_sink : FALSE]
 		munmap(map, total);
 		return NULL;
 	}
