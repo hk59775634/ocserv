@@ -940,6 +940,7 @@ int handle_sec_auth_init(int cfd, sec_mod_st *sec, const SecAuthInitMsg *req,
 		st.ip = req->remote_ip;
 		st.our_ip = req->our_ip;
 		st.user_agent = req->user_agent;
+		st.sid = e->acct_info.safe_id;
 		st.id = pid;
 
 		ret = e->module->auth_init(&e->auth_ctx, e, e->vhost_auth_ctx,
