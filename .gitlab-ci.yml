@@ -198,7 +198,7 @@ Coverity:
   - schedules
   - coverity
   script:
-  - wget --quiet https://scan.coverity.com/download/linux64 --post-data "token=$COVERITY_SCAN_TOKEN&project=$COVERITY_SCAN_PROJECT_NAME" -O /tmp/coverity_tool.tgz
+  - curl --silent https://scan.coverity.com/download/linux64 --data "token=$COVERITY_SCAN_TOKEN&project=$COVERITY_SCAN_PROJECT_NAME" -o /tmp/coverity_tool.tgz
   - tar xfz /tmp/coverity_tool.tgz
   - git submodule update --init
   - CFLAGS="-g -O0" meson setup build -Dlatency-stats=enabled
