@@ -92,7 +92,25 @@ int ip_route_sanity_check(void *pool, char **_route)
 	char *route = *_route, *n;
 	char *slash_ptr, *pstr;
 
-	/* this check is valid for IPv4 only */
+	/* IPv6 route: must contain a colon */
+	if (strchr(route, ':') != NULL) {
+		char *q;
+		for (q = route; *q; q++) {
+			if (*q != ':' && *q != '/' && *q != '.' &&
+			    !((*q >= '0' && *q <= '9') ||
+			      (*q >= 'a' && *q <= 'f') ||
+			      (*q >= 'A' && *q <= 'F'))) {
+				oc_syslog(
+					LOG_ERR,
+					"route '%s' contains invalid characters for IPv6",
+					route);
+				return -1;
+			}
+		}
+		return 0;
+	}
+
+	/* IPv4 route: must contain a dot */
 	p = strchr(route, '.');
 	if (p == NULL)
 		return 0;
@@ -105,6 +123,21 @@ int ip_route_sanity_check(void *pool, char **_route)
 			route);
 		return -1;
 	}
+
+	/* Validate: only digits, dots, and exactly one slash allowed */
+	{
+		char *q;
+		for (q = route; *q; q++) {
+			if (*q != '.' && *q != '/' && (*q < '0' || *q > '9')) {
+				oc_syslog(
+					LOG_ERR,
+					"route '%s' contains invalid characters",
+					route);
+				return -1;
+			}
+		}
+	}
+
 	slash_ptr = p;
 	p++;
 
